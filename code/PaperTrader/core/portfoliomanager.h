@@ -46,6 +46,9 @@ public slots:
 signals:
     void portfolioChanged(const PortfolioSnapshot &snapshot, const QList<Position> &positions);
 
+private slots:
+    void emitSnapshot();
+
 private:
     void updateUnrealizedFor(const QString &symbol);
     void updateUnrealized(Position &position);
@@ -66,7 +69,6 @@ private:
     double shortMarginRate() const { return m_shortMarginRate; }
     void recomputeOrderMargin();
     void recordOrUpdatePosition(const QString &symbol, const Position &position);
-    void emitSnapshot();
 
     double m_cash = 100000.0;
     QMap<QString, Position> m_positions;

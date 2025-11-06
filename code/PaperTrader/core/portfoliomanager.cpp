@@ -1,5 +1,6 @@
 #include "portfoliomanager.h"
 
+#include <QMetaObject>
 #include <QtGlobal>
 #include <cmath>
 #include <algorithm>
@@ -234,7 +235,7 @@ void PortfolioManager::onCandle(const Candle &c)
     const QString symbol = c.symbol.toUpper();
     m_lastPrices[symbol] = c.close;
     updateUnrealizedFor(symbol);
-    emitSnapshot();
+    QMetaObject::invokeMethod(this, "emitSnapshot", Qt::QueuedConnection);
 }
 
 void PortfolioManager::applyFill(const Order &order)
@@ -350,7 +351,7 @@ void PortfolioManager::applyFill(const Order &order)
 
     recordOrUpdatePosition(symbol, pos);
     recomputeOrderMargin();
-    emitSnapshot();
+    QMetaObject::invokeMethod(this, "emitSnapshot", Qt::QueuedConnection);
 }
 
 void PortfolioManager::onOrdersUpdated
@@ -368,7 +369,7 @@ void PortfolioManager::onOrdersUpdated(const QList<Order> &orders)
     }
     // Pending orders reserve margin so that available funds reflect true buying power.
     recomputeOrderMargin();
-    emitSnapshot();
+    QMetaObject::invokeMethod(this, "emitSnapshot", Qt::QueuedConnection);
 }
 
 void PortfolioManager::updateUnrealizedFor(const QString &symbol)
@@ -518,5 +519,5 @@ void PortfolioManager::recordOrUpdatePosition(const QString &symbol, const Posit
 
 void PortfolioManager::emitSnapshot()
 {
-    emit portfolioChanged(snapshot(), positions());
+    emit portfolioChanged(snapshot(), m_positions.values());
 }

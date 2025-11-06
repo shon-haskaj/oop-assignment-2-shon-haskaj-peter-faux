@@ -2,6 +2,7 @@
 
 #include <QtGlobal>
 #include <cmath>
+#include <algorithm>
 
 namespace {
 constexpr double kMaintenanceMarginRate = 0.5; // Simplified margin assumption
@@ -64,38 +65,70 @@ void PortfolioManager::applyFill(const Order &order)
     pos.symbol = symbol;
 
     const bool isBuy = order.side.compare("BUY", Qt::CaseInsensitive) == 0;
-    const double referencePrice = order.filledPrice > 0.0
+    double price = order.filledPrice > 0.0
             ? order.filledPrice
             : m_lastPrices.value(symbol, order.price);
-    const double qty = order.filledQuantity;
+    if (price <= 0.0)
+        price = order.price;
+    if (price <= 0.0)
+        price = m_lastPrices.value(symbol, 0.0);
+
+    auto weightedAverage = [](double existingQty, double existingAvg, double addQty, double addPrice) {
+        const double absExisting = std::abs(existingQty);
+        const double total = absExisting + addQty;
+        if (qFuzzyIsNull(total))
+            return 0.0;
+        return (existingAvg * absExisting + addPrice * addQty) / total;
+    };
+
+    double remainingQty = order.filledQuantity;
 
     if (isBuy) {
-        const double currentValue = pos.avgPx * pos.qty;
-        pos.qty += qty;
-        if (!qFuzzyIsNull(pos.qty)) {
-            pos.avgPx = (currentValue + referencePrice * qty) / pos.qty;
-        } else {
-            pos.avgPx = 0.0;
+        while (remainingQty > 0.0) {
+            if (pos.qty < 0.0) {
+                const double coverQty = std::min(remainingQty, -pos.qty);
+                const double realized = (pos.avgPx - price) * coverQty;
+                pos.realizedPnL += realized;
+                m_realizedPnL += realized;
+                m_cash -= price * coverQty;
+                pos.qty += coverQty;
+                remainingQty -= coverQty;
+                if (qFuzzyIsNull(pos.qty))
+                    pos.avgPx = 0.0;
+            } else {
+                m_cash -= price * remainingQty;
+                pos.avgPx = weightedAverage(pos.qty, pos.avgPx, remainingQty, price);
+                pos.qty += remainingQty;
+                remainingQty = 0.0;
+            }
         }
-        m_cash -= referencePrice * qty;
     } else {
-        m_cash += referencePrice * qty;
-        const double realizedDelta = (referencePrice - pos.avgPx) * qty;
-        pos.realizedPnL += realizedDelta;
-        // Track realized P&L at the portfolio level even when positions are closed.
-        m_realizedPnL += realizedDelta;
-        pos.qty -= qty;
-        if (qFuzzyIsNull(pos.qty)) {
-            pos.avgPx = 0.0;
+        while (remainingQty > 0.0) {
+            if (pos.qty > 0.0) {
+                const double sellQty = std::min(remainingQty, pos.qty);
+                const double realized = (price - pos.avgPx) * sellQty;
+                pos.realizedPnL += realized;
+                m_realizedPnL += realized;
+                m_cash += price * sellQty;
+                pos.qty -= sellQty;
+                remainingQty -= sellQty;
+                if (qFuzzyIsNull(pos.qty))
+                    pos.avgPx = 0.0;
+            } else {
+                m_cash += price * remainingQty;
+                pos.avgPx = weightedAverage(pos.qty, pos.avgPx, remainingQty, price);
+                pos.qty -= remainingQty;
+                remainingQty = 0.0;
+            }
         }
     }
 
-    pos.lastPrice = m_lastPrices.value(symbol, referencePrice);
+    m_lastPrices[symbol] = price;
+    pos.lastPrice = m_lastPrices.value(symbol, price);
     pos.unrealizedPnL = (pos.lastPrice - pos.avgPx) * pos.qty;
-    m_lastPrices[symbol] = pos.lastPrice;
 
     if (qFuzzyIsNull(pos.qty)) {
-        // Preserve realized P&L in the manager before removing the empty slot
+        pos.unrealizedPnL = 0.0;
         m_positions.remove(symbol);
     } else {
         m_positions.insert(symbol, pos);

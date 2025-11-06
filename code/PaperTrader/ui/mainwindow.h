@@ -17,6 +17,7 @@ class QToolButton;
 class QFrame;
 class QIntValidator;
 class QDoubleValidator;
+class QSplitter;
 
 class MainWindow : public QMainWindow {
     Q_OBJECT
@@ -91,10 +92,22 @@ private:
     PortfolioManager *m_portfolioManager = nullptr;
     StorageManager   *m_storage = nullptr;
 
+    QSplitter *m_horizontalSplit = nullptr;
+    QSplitter *m_verticalSplit = nullptr;
+    QWidget   *m_chartPanelWidget = nullptr;
+    QWidget   *m_orderPanelWidget = nullptr;
+    QWidget   *m_watchlistPanelWidget = nullptr;
+    QWidget   *m_topAreaWidget = nullptr;
+    QWidget   *m_portfolioPanelWidget = nullptr;
+
     QStringList m_watchlist;
     double m_lastPrice = 0.0;
     QString m_lastSymbol;
     int m_quantityPrecision = 6;
+
+    int m_savedWatchlistWidth = 260;
+    int m_savedOrderWidth = 260;
+    int m_savedPortfolioHeight = 240;
 
     MarketDataProvider::FeedMode m_currentMode = MarketDataProvider::FeedMode::Synthetic;
 
@@ -109,4 +122,7 @@ private:
     void loadStateFromStorage();
     void updateOrderPriceVisibility();
     OrderManager::OrderType currentOrderType() const;
+    void toggleWatchlistPanel(bool expanded, bool animate);
+    void toggleOrderPanel(bool expanded, bool animate);
+    void togglePortfolioPanel(bool expanded, bool animate);
 };

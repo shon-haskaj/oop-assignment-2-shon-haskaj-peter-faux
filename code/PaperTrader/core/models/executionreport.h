@@ -6,6 +6,6 @@ struct ExecutionReport {
     int orderId{};
     QString status;   // "Filled", "Cancelled"
     double fillPx{};
-    int fillQty{};
+    double fillQty{};
 };
 #endif // EXECUTIONREPORT_H

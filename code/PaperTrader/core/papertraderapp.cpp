@@ -20,6 +20,8 @@ PaperTraderApp::PaperTraderApp(QObject *parent)
 
     QObject::connect(m_orderManager, &OrderManager::orderFilled,
                      m_portfolioManager, &PortfolioManager::applyFill);
+    QObject::connect(m_orderManager, &OrderManager::ordersChanged,
+                     m_portfolioManager, &PortfolioManager::onOrdersUpdated);
 }
 
 void PaperTraderApp::start() {

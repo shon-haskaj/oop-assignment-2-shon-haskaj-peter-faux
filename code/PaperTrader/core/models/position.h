@@ -4,7 +4,7 @@
 
 struct Position {
     QString symbol;
-    int qty{};
+    double qty{};
     double avgPx{};
     double realizedPnL{};
     double unrealizedPnL{};

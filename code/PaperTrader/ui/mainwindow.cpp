@@ -33,7 +33,7 @@ void MainWindow::setupUi()
     toolbarLayout->setSpacing(8);
 
     m_feedSelector = new QComboBox(this);
-    m_feedSelector->addItems({"Synthetic", "Binance", "Finnhub"});
+    m_feedSelector->addItems({"Synthetic", "Binance"});
 
     m_symbolEdit = new QLineEdit(this);
     m_symbolEdit->setPlaceholderText("Symbol (e.g. btcusdt or eurusd)");
@@ -83,12 +83,10 @@ void MainWindow::setupConnections()
 
 void MainWindow::onFeedModeChanged(int index)
 {
-    switch (index) {
-    case 0: m_currentMode = MarketDataProvider::FeedMode::Synthetic; break;
-    case 1: m_currentMode = MarketDataProvider::FeedMode::Binance; break;
-    case 2: m_currentMode = MarketDataProvider::FeedMode::Finnhub; break;
-    default: m_currentMode = MarketDataProvider::FeedMode::Synthetic; break;
-    }
+    if (index == 1)
+        m_currentMode = MarketDataProvider::FeedMode::Binance;
+    else
+        m_currentMode = MarketDataProvider::FeedMode::Synthetic;
 }
 
 void MainWindow::onStartFeed()

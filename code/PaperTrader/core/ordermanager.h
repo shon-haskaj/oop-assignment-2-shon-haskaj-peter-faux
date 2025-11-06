@@ -15,13 +15,13 @@ public:
     Order createOrder(OrderType type,
                       const QString &symbol,
                       const QString &side,
-                      int quantity,
+                      double quantity,
                       double price = 0.0);
 
     int placeOrder(OrderType type,
                    const QString &symbol,
                    const QString &side,
-                   int quantity,
+                   double quantity,
                    double price = 0.0);
 
     bool cancelOrder(int orderId);

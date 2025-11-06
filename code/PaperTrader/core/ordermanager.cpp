@@ -22,7 +22,7 @@ QString OrderManager::normaliseSymbol(const QString &symbol) const
 Order OrderManager::createOrder(OrderType type,
                                 const QString &symbol,
                                 const QString &side,
-                                int quantity,
+                                double quantity,
                                 double price)
 {
     Order order;
@@ -40,10 +40,10 @@ Order OrderManager::createOrder(OrderType type,
 int OrderManager::placeOrder(OrderType type,
                              const QString &symbol,
                              const QString &side,
-                             int quantity,
+                             double quantity,
                              double price)
 {
-    if (symbol.trimmed().isEmpty() || quantity <= 0)
+    if (symbol.trimmed().isEmpty() || quantity <= 0.0)
         return -1;
 
     const QString key = normaliseSymbol(symbol);

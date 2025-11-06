@@ -8,6 +8,7 @@
 #include "chartwidget.h"
 #include "core/models/order.h"
 #include "core/models/position.h"
+#include "core/models/portfoliosnapshot.h"
 
 class QListWidget;
 class QListWidgetItem;
@@ -37,7 +38,9 @@ private slots:
     void onCancelSelectedOrder();
     void onOrderSelectionChanged();
     void refreshOrders(const QList<Order> &orders);
-    void refreshPortfolio(double cash, double unrealized, const QList<Position> &positions);
+    void refreshPortfolio(const PortfolioSnapshot &snapshot, const QList<Position> &positions);
+    void onOrderPanelToggled(bool expanded);
+    void onPortfolioToggled(bool expanded);
 
 private:
     PaperTraderApp *m_app;
@@ -66,13 +69,22 @@ private:
     QPushButton *m_placeOrderButton;
     QPushButton *m_cancelOrderButton;
     QTableWidget *m_ordersTable;
+    QToolButton *m_orderToggleButton;
+    QWidget     *m_orderContainer;
 
     // Portfolio UI
-    QLabel      *m_cashLabel;
+    QLabel      *m_balanceLabel;
+    QLabel      *m_equityLabel;
+    QLabel      *m_realizedLabel;
     QLabel      *m_unrealizedLabel;
+    QLabel      *m_accountMarginLabel;
+    QLabel      *m_orderMarginLabel;
+    QLabel      *m_availableFundsLabel;
     QTableWidget *m_positionsTable;
+    QToolButton  *m_portfolioToggleButton;
+    QWidget      *m_portfolioContent;
 
-    QIntValidator    *m_qtyValidator;
+    QDoubleValidator *m_qtyValidator;
     QDoubleValidator *m_priceValidator;
 
     OrderManager     *m_orderManager = nullptr;
@@ -82,6 +94,7 @@ private:
     QStringList m_watchlist;
     double m_lastPrice = 0.0;
     QString m_lastSymbol;
+    int m_quantityPrecision = 6;
 
     MarketDataProvider::FeedMode m_currentMode = MarketDataProvider::FeedMode::Synthetic;
 

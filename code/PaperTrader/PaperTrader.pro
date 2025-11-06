@@ -35,6 +35,7 @@ HEADERS += \
     core/models/order.h \
     core/models/executionreport.h \
     core/models/position.h \
+    core/models/portfoliosnapshot.h \
     ui/mainwindow.h \
     ui/chartwidget.h \
     ui/controllers/tradingcontroller.h \

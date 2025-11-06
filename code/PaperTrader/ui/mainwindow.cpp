@@ -9,8 +9,8 @@
 #include <QListWidget>
 #include <QTableWidget>
 #include <QHeaderView>
+#include <QGridLayout>
 #include <QLabel>
-#include <QIntValidator>
 #include <QDoubleValidator>
 #include <QLocale>
 #include <QJsonObject>
@@ -71,42 +71,58 @@ void MainWindow::setupUi()
     toolbarLayout->addWidget(m_stopButton);
     toolbarLayout->addWidget(m_statusLabel);
 
-    QSplitter *splitter = new QSplitter(Qt::Horizontal, this);
-    splitter->setChildrenCollapsible(false);
-    splitter->setHandleWidth(2);
+    // Build a TradingView-inspired layout: central chart, right-side drawers, bottom portfolio dock.
+    QSplitter *verticalSplit = new QSplitter(Qt::Vertical, this);
+    verticalSplit->setChildrenCollapsible(false);
+    verticalSplit->setHandleWidth(2);
 
-    QFrame *watchlistPanel = new QFrame(splitter);
-    watchlistPanel->setObjectName("watchlistPanel");
-    buildWatchlistPanel(watchlistPanel);
+    QWidget *topArea = new QWidget(verticalSplit);
+    QVBoxLayout *topLayout = new QVBoxLayout(topArea);
+    topLayout->setContentsMargins(0, 0, 0, 0);
+    topLayout->setSpacing(8);
 
-    QFrame *chartPanel = new QFrame(splitter);
+    QSplitter *horizontalSplit = new QSplitter(Qt::Horizontal, topArea);
+    horizontalSplit->setChildrenCollapsible(false);
+    horizontalSplit->setHandleWidth(2);
+
+    QFrame *chartPanel = new QFrame(horizontalSplit);
     chartPanel->setObjectName("chartPanel");
     QVBoxLayout *chartLayout = new QVBoxLayout(chartPanel);
     chartLayout->setContentsMargins(0, 0, 0, 0);
     chartLayout->addWidget(m_chart);
 
-    QFrame *sidePanel = new QFrame(splitter);
-    sidePanel->setObjectName("sidePanel");
-    QVBoxLayout *sideLayout = new QVBoxLayout(sidePanel);
-    sideLayout->setContentsMargins(12, 12, 12, 12);
-    sideLayout->setSpacing(16);
-
-    QFrame *orderPanel = new QFrame(sidePanel);
+    QFrame *orderPanel = new QFrame(horizontalSplit);
     orderPanel->setObjectName("orderPanel");
     buildOrderPanel(orderPanel);
-    sideLayout->addWidget(orderPanel);
 
-    QFrame *portfolioPanel = new QFrame(sidePanel);
+    QFrame *watchlistPanel = new QFrame(horizontalSplit);
+    watchlistPanel->setObjectName("watchlistPanel");
+    buildWatchlistPanel(watchlistPanel);
+
+    horizontalSplit->addWidget(chartPanel);
+    horizontalSplit->addWidget(orderPanel);
+    horizontalSplit->addWidget(watchlistPanel);
+    horizontalSplit->setStretchFactor(0, 1);
+    horizontalSplit->setStretchFactor(1, 0);
+    horizontalSplit->setStretchFactor(2, 0);
+
+    topLayout->addWidget(horizontalSplit);
+
+    QFrame *portfolioPanel = new QFrame(verticalSplit);
     portfolioPanel->setObjectName("portfolioPanel");
     buildPortfolioPanel(portfolioPanel);
-    sideLayout->addWidget(portfolioPanel, 1);
 
-    splitter->setStretchFactor(0, 0);
-    splitter->setStretchFactor(1, 1);
-    splitter->setStretchFactor(2, 0);
+    verticalSplit->addWidget(topArea);
+    verticalSplit->addWidget(portfolioPanel);
+    verticalSplit->setStretchFactor(0, 1);
+    verticalSplit->setStretchFactor(1, 0);
 
     mainLayout->addWidget(toolbar);
-    mainLayout->addWidget(splitter, 1);
+    mainLayout->addWidget(verticalSplit, 1);
+
+    onWatchlistToggled(m_watchlistToggle->isChecked());
+    onOrderPanelToggled(m_orderToggleButton->isChecked());
+    onPortfolioToggled(m_portfolioToggleButton->isChecked());
 
     setCentralWidget(central);
     setWindowTitle("PaperTrader - Market Feed Viewer");
@@ -124,8 +140,8 @@ void MainWindow::setupUi()
         " padding: 6px 14px; color: white; font-weight: 600; }"
         "QPushButton:hover { background-color: #3a65ff; }"
         "QLabel#sectionTitle { font-weight: 600; font-size: 14px; color: #a7b5d8; }"
-        "QToolButton#watchlistToggle { background-color: transparent; border: none;"
-        " font-weight: 600; color: #a7b5d8; }"
+        "QToolButton#watchlistToggle, QToolButton#orderToggle, QToolButton#portfolioToggle {"
+        " background-color: transparent; border: none; color: #a7b5d8; }"
         "QListWidget { background-color: #111522; border: 1px solid #2c3249;"
         " border-radius: 6px; }"
         "QTableWidget { background-color: #111522; border: 1px solid #2c3249;"
@@ -141,14 +157,21 @@ void MainWindow::buildWatchlistPanel(QFrame *panel)
     layout->setContentsMargins(12, 12, 12, 12);
     layout->setSpacing(10);
 
+    QHBoxLayout *header = new QHBoxLayout();
+    header->setContentsMargins(0, 0, 0, 0);
+    QLabel *title = new QLabel("Watchlist", panel);
+    title->setObjectName("sectionTitle");
+    header->addWidget(title);
+    header->addStretch(1);
+    // Edge toggle keeps the drawer accessible while collapsed.
     m_watchlistToggle = new QToolButton(panel);
     m_watchlistToggle->setObjectName("watchlistToggle");
-    m_watchlistToggle->setText("Watchlist");
-    m_watchlistToggle->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
-    m_watchlistToggle->setArrowType(Qt::DownArrow);
     m_watchlistToggle->setCheckable(true);
     m_watchlistToggle->setChecked(true);
-    layout->addWidget(m_watchlistToggle);
+    m_watchlistToggle->setArrowType(Qt::RightArrow);
+    m_watchlistToggle->setToolTip(tr("Collapse watchlist"));
+    header->addWidget(m_watchlistToggle, 0, Qt::AlignRight);
+    layout->addLayout(header);
 
     m_watchlistContainer = new QWidget(panel);
     QVBoxLayout *containerLayout = new QVBoxLayout(m_watchlistContainer);
@@ -185,9 +208,26 @@ void MainWindow::buildOrderPanel(QFrame *panel)
     layout->setContentsMargins(12, 12, 12, 12);
     layout->setSpacing(10);
 
+    QHBoxLayout *header = new QHBoxLayout();
+    header->setContentsMargins(0, 0, 0, 0);
     QLabel *title = new QLabel("Order Entry", panel);
     title->setObjectName("sectionTitle");
-    layout->addWidget(title);
+    header->addWidget(title);
+    header->addStretch(1);
+    // Collapsible order ticket mirrors the TradingView drawer interaction.
+    m_orderToggleButton = new QToolButton(panel);
+    m_orderToggleButton->setObjectName("orderToggle");
+    m_orderToggleButton->setCheckable(true);
+    m_orderToggleButton->setChecked(true);
+    m_orderToggleButton->setArrowType(Qt::RightArrow);
+    m_orderToggleButton->setToolTip(tr("Collapse order ticket"));
+    header->addWidget(m_orderToggleButton, 0, Qt::AlignRight);
+    layout->addLayout(header);
+
+    m_orderContainer = new QWidget(panel);
+    QVBoxLayout *containerLayout = new QVBoxLayout(m_orderContainer);
+    containerLayout->setContentsMargins(0, 0, 0, 0);
+    containerLayout->setSpacing(10);
 
     QGridLayout *form = new QGridLayout();
     form->setHorizontalSpacing(8);
@@ -201,7 +241,8 @@ void MainWindow::buildOrderPanel(QFrame *panel)
 
     m_orderQtyEdit = new QLineEdit(panel);
     m_orderQtyEdit->setPlaceholderText("Quantity");
-    m_qtyValidator = new QIntValidator(1, 1'000'000, this);
+    m_qtyValidator = new QDoubleValidator(0.000001, 1e9, m_quantityPrecision, this);
+    m_qtyValidator->setNotation(QDoubleValidator::StandardNotation);
     m_orderQtyEdit->setValidator(m_qtyValidator);
 
     m_orderPriceEdit = new QLineEdit(panel);
@@ -219,7 +260,7 @@ void MainWindow::buildOrderPanel(QFrame *panel)
     form->addWidget(new QLabel("Price", panel), 1, 2);
     form->addWidget(m_orderPriceEdit, 1, 3);
 
-    layout->addLayout(form);
+    containerLayout->addLayout(form);
 
     QHBoxLayout *buttonRow = new QHBoxLayout();
     buttonRow->setSpacing(8);
@@ -228,11 +269,11 @@ void MainWindow::buildOrderPanel(QFrame *panel)
     m_cancelOrderButton->setEnabled(false);
     buttonRow->addWidget(m_placeOrderButton, 1);
     buttonRow->addWidget(m_cancelOrderButton, 1);
-    layout->addLayout(buttonRow);
+    containerLayout->addLayout(buttonRow);
 
     QLabel *ordersHeader = new QLabel("Orders", panel);
     ordersHeader->setObjectName("sectionTitle");
-    layout->addWidget(ordersHeader);
+    containerLayout->addWidget(ordersHeader);
 
     m_ordersTable = new QTableWidget(panel);
     m_ordersTable->setColumnCount(7);
@@ -243,7 +284,9 @@ void MainWindow::buildOrderPanel(QFrame *panel)
     m_ordersTable->setSelectionBehavior(QAbstractItemView::SelectRows);
     m_ordersTable->setSelectionMode(QAbstractItemView::SingleSelection);
     m_ordersTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
-    layout->addWidget(m_ordersTable, 1);
+    containerLayout->addWidget(m_ordersTable, 1);
+
+    layout->addWidget(m_orderContainer);
 
     updateOrderPriceVisibility();
 }
@@ -258,28 +301,32 @@ void MainWindow::buildPortfolioPanel(QFrame *panel)
     title->setObjectName("sectionTitle");
     layout->addWidget(title);
 
-    QHBoxLayout *metrics = new QHBoxLayout();
-    metrics->setSpacing(16);
+    m_portfolioContent = new QWidget(panel);
+    QVBoxLayout *contentLayout = new QVBoxLayout(m_portfolioContent);
+    contentLayout->setContentsMargins(0, 0, 0, 0);
+    contentLayout->setSpacing(12);
 
-    QVBoxLayout *cashLayout = new QVBoxLayout();
-    QLabel *cashLabel = new QLabel("Cash", panel);
-    m_cashLabel = new QLabel("$0.00", panel);
-    m_cashLabel->setObjectName("metricValue");
-    cashLayout->addWidget(cashLabel);
-    cashLayout->addWidget(m_cashLabel);
+    QGridLayout *metrics = new QGridLayout();
+    metrics->setHorizontalSpacing(18);
+    metrics->setVerticalSpacing(6);
 
-    QVBoxLayout *unrealLayout = new QVBoxLayout();
-    QLabel *unrealLabel = new QLabel("Unrealized P&L", panel);
-    m_unrealizedLabel = new QLabel("$0.00", panel);
-    m_unrealizedLabel->setObjectName("metricValue");
-    unrealLayout->addWidget(unrealLabel);
-    unrealLayout->addWidget(m_unrealizedLabel);
+    auto addMetric = [&](int row, int column, const QString &labelText, QLabel *&valueLabel) {
+        QLabel *label = new QLabel(labelText, panel);
+        valueLabel = new QLabel("$0.00", panel);
+        valueLabel->setObjectName("metricValue");
+        metrics->addWidget(label, row, column * 2);
+        metrics->addWidget(valueLabel, row, column * 2 + 1);
+    };
 
-    metrics->addLayout(cashLayout);
-    metrics->addLayout(unrealLayout);
-    metrics->addStretch(1);
+    addMetric(0, 0, tr("Account Balance"), m_balanceLabel);
+    addMetric(0, 1, tr("Equity"), m_equityLabel);
+    addMetric(0, 2, tr("Realized P&L"), m_realizedLabel);
+    addMetric(1, 0, tr("Unrealized P&L"), m_unrealizedLabel);
+    addMetric(1, 1, tr("Account Margin"), m_accountMarginLabel);
+    addMetric(1, 2, tr("Order Margin"), m_orderMarginLabel);
+    addMetric(2, 0, tr("Available Funds"), m_availableFundsLabel);
 
-    layout->addLayout(metrics);
+    contentLayout->addLayout(metrics);
 
     m_positionsTable = new QTableWidget(panel);
     m_positionsTable->setColumnCount(5);
@@ -289,7 +336,22 @@ void MainWindow::buildPortfolioPanel(QFrame *panel)
     m_positionsTable->verticalHeader()->setVisible(false);
     m_positionsTable->setSelectionMode(QAbstractItemView::NoSelection);
     m_positionsTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
-    layout->addWidget(m_positionsTable, 1);
+    contentLayout->addWidget(m_positionsTable, 1);
+
+    layout->addWidget(m_portfolioContent, 1);
+
+    QHBoxLayout *footer = new QHBoxLayout();
+    footer->setContentsMargins(0, 0, 0, 0);
+    footer->addStretch(1);
+    // Bottom-right toggle emulates TradingView's collapsible account bar.
+    m_portfolioToggleButton = new QToolButton(panel);
+    m_portfolioToggleButton->setObjectName("portfolioToggle");
+    m_portfolioToggleButton->setCheckable(true);
+    m_portfolioToggleButton->setChecked(true);
+    m_portfolioToggleButton->setArrowType(Qt::DownArrow);
+    m_portfolioToggleButton->setToolTip(tr("Collapse portfolio panel"));
+    footer->addWidget(m_portfolioToggleButton);
+    layout->addLayout(footer);
 }
 
 void MainWindow::setupConnections()
@@ -302,6 +364,10 @@ void MainWindow::setupConnections()
 
     connect(m_watchlistToggle, &QToolButton::toggled,
             this, &MainWindow::onWatchlistToggled);
+    connect(m_orderToggleButton, &QToolButton::toggled,
+            this, &MainWindow::onOrderPanelToggled);
+    connect(m_portfolioToggleButton, &QToolButton::toggled,
+            this, &MainWindow::onPortfolioToggled);
     connect(m_watchlistAddButton, &QPushButton::clicked,
             this, &MainWindow::onAddWatchlistSymbol);
     connect(m_watchlistRemoveButton, &QPushButton::clicked,
@@ -347,8 +413,7 @@ void MainWindow::setupConnections()
     if (m_portfolioManager) {
         connect(m_portfolioManager, &PortfolioManager::portfolioChanged,
                 this, &MainWindow::refreshPortfolio);
-        refreshPortfolio(m_portfolioManager->cash(),
-                         m_portfolioManager->totalUnrealizedPnL(),
+        refreshPortfolio(m_portfolioManager->snapshot(),
                          m_portfolioManager->positions());
     }
 }
@@ -403,8 +468,26 @@ void MainWindow::onCandleReceived(const Candle &c)
 
 void MainWindow::onWatchlistToggled(bool expanded)
 {
-    m_watchlistToggle->setArrowType(expanded ? Qt::DownArrow : Qt::RightArrow);
+    m_watchlistToggle->setArrowType(expanded ? Qt::RightArrow : Qt::LeftArrow);
+    m_watchlistToggle->setToolTip(expanded ? tr("Collapse watchlist")
+                                         : tr("Expand watchlist"));
     m_watchlistContainer->setVisible(expanded);
+}
+
+void MainWindow::onOrderPanelToggled(bool expanded)
+{
+    m_orderToggleButton->setArrowType(expanded ? Qt::RightArrow : Qt::LeftArrow);
+    m_orderToggleButton->setToolTip(expanded ? tr("Collapse order ticket")
+                                             : tr("Expand order ticket"));
+    m_orderContainer->setVisible(expanded);
+}
+
+void MainWindow::onPortfolioToggled(bool expanded)
+{
+    m_portfolioToggleButton->setArrowType(expanded ? Qt::DownArrow : Qt::UpArrow);
+    m_portfolioToggleButton->setToolTip(expanded ? tr("Collapse portfolio panel")
+                                                 : tr("Expand portfolio panel"));
+    m_portfolioContent->setVisible(expanded);
 }
 
 void MainWindow::onAddWatchlistSymbol()
@@ -473,10 +556,10 @@ void MainWindow::onPlaceOrder()
 
     const QString symbol = m_symbolEdit->text().trimmed().toUpper();
     const QString side = m_orderSideCombo->currentText().toUpper();
-    const int quantity = m_orderQtyEdit->text().toInt();
+    const double quantity = m_orderQtyEdit->text().toDouble();
     double price = m_orderPriceEdit->text().toDouble();
 
-    if (symbol.isEmpty() || quantity <= 0) {
+    if (symbol.isEmpty() || quantity <= 0.0) {
         m_statusLabel->setText("⚠️ Invalid order");
         return;
     }
@@ -541,6 +624,17 @@ void MainWindow::refreshOrders(const QList<Order> &orders)
 {
     m_ordersTable->setRowCount(orders.size());
     int row = 0;
+    auto formatQuantity = [this](double value) {
+        QString text = QString::number(value, 'f', m_quantityPrecision);
+        if (text.contains('.')) {
+            while (text.endsWith('0'))
+                text.chop(1);
+            if (text.endsWith('.'))
+                text.chop(1);
+        }
+        return text;
+    };
+    QLocale locale;
     for (const Order &order : orders) {
         auto setItem = [&](int column, const QString &text) {
             auto *item = new QTableWidgetItem(text);
@@ -556,30 +650,59 @@ void MainWindow::refreshOrders(const QList<Order> &orders)
         setItem(1, order.symbol);
         setItem(2, order.side);
         setItem(3, order.type);
-        setItem(4, QString::number(order.quantity));
+        setItem(4, formatQuantity(order.quantity));
         const double displayPrice = order.filledPrice > 0.0 ? order.filledPrice : order.price;
-        setItem(5, QString::number(displayPrice, 'f', 2));
+        setItem(5, locale.toString(displayPrice, 'f', 2));
         setItem(6, order.status);
         ++row;
     }
     onOrderSelectionChanged();
 }
 
-void MainWindow::refreshPortfolio(double cash, double unrealized, const QList<Position> &positions)
+void MainWindow::refreshPortfolio(const PortfolioSnapshot &snapshot, const QList<Position> &positions)
 {
     QLocale locale;
-    m_cashLabel->setText(locale.toCurrencyString(cash));
-    m_unrealizedLabel->setText(locale.toCurrencyString(unrealized));
-    if (unrealized > 0.0) {
-        m_unrealizedLabel->setStyleSheet("color: #12d980;");
-    } else if (unrealized < 0.0) {
-        m_unrealizedLabel->setStyleSheet("color: #ff6476;");
+    auto setCurrency = [&](QLabel *label, double value) {
+        label->setText(locale.toCurrencyString(value));
+    };
+    auto applyPnLStyle = [](QLabel *label, double value) {
+        if (value > 0.0) {
+            label->setStyleSheet("color: #12d980;");
+        } else if (value < 0.0) {
+            label->setStyleSheet("color: #ff6476;");
+        } else {
+            label->setStyleSheet("");
+        }
+    };
+
+    setCurrency(m_balanceLabel, snapshot.accountBalance);
+    setCurrency(m_equityLabel, snapshot.equity);
+    setCurrency(m_realizedLabel, snapshot.realizedPnL);
+    setCurrency(m_unrealizedLabel, snapshot.unrealizedPnL);
+    setCurrency(m_accountMarginLabel, snapshot.accountMargin);
+    setCurrency(m_orderMarginLabel, snapshot.orderMargin);
+    setCurrency(m_availableFundsLabel, snapshot.availableFunds);
+
+    applyPnLStyle(m_realizedLabel, snapshot.realizedPnL);
+    applyPnLStyle(m_unrealizedLabel, snapshot.unrealizedPnL);
+    if (snapshot.availableFunds < 0.0) {
+        m_availableFundsLabel->setStyleSheet("color: #ff6476;");
     } else {
-        m_unrealizedLabel->setStyleSheet("");
+        m_availableFundsLabel->setStyleSheet("");
     }
 
     m_positionsTable->setRowCount(positions.size());
     int row = 0;
+    auto formatQuantity = [this](double value) {
+        QString text = QString::number(value, 'f', m_quantityPrecision);
+        if (text.contains('.')) {
+            while (text.endsWith('0'))
+                text.chop(1);
+            if (text.endsWith('.'))
+                text.chop(1);
+        }
+        return text;
+    };
     for (const Position &pos : positions) {
         auto setItem = [&](int column, const QString &text) {
             auto *item = new QTableWidgetItem(text);
@@ -587,10 +710,10 @@ void MainWindow::refreshPortfolio(double cash, double unrealized, const QList<Po
             m_positionsTable->setItem(row, column, item);
         };
         setItem(0, pos.symbol);
-        setItem(1, QString::number(pos.qty));
-        setItem(2, QString::number(pos.avgPx, 'f', 2));
-        setItem(3, QString::number(pos.lastPrice, 'f', 2));
-        setItem(4, QString::number(pos.unrealizedPnL, 'f', 2));
+        setItem(1, formatQuantity(pos.qty));
+        setItem(2, locale.toString(pos.avgPx, 'f', 2));
+        setItem(3, locale.toString(pos.lastPrice, 'f', 2));
+        setItem(4, locale.toString(pos.unrealizedPnL, 'f', 2));
         ++row;
     }
 }

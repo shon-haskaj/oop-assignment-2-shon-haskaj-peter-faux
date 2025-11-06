@@ -8,11 +8,18 @@ PaperTraderApp::PaperTraderApp(QObject *parent)
 {
     m_dataProvider = new MarketDataProvider(this);
     m_chartManager = new ChartManager(this);
+    m_orderManager = new OrderManager(this);
+    m_portfolioManager = new PortfolioManager(this);
+    m_storageManager = new StorageManager(this);
 
-    // QObject::connect(m_dataProvider, &MarketDataProvider::newCandle,
-    //                  m_chartManager,  &ChartManager::onNewCandle);
     QObject::connect(m_dataProvider, &MarketDataProvider::connectionStateChanged,
                      this, [](bool ok){ qCInfo(lcApp) << (ok ? "Connected" : "Disconnected"); });
+
+    QObject::connect(m_dataProvider, &MarketDataProvider::newCandle,
+                     m_portfolioManager, &PortfolioManager::onCandle);
+
+    QObject::connect(m_orderManager, &OrderManager::orderFilled,
+                     m_portfolioManager, &PortfolioManager::applyFill);
 }
 
 void PaperTraderApp::start() {
@@ -22,5 +29,19 @@ void PaperTraderApp::start() {
 
 void PaperTraderApp::stop() {
     qCInfo(lcApp) << "Stopping PaperTraderApp...";
+    m_dataProvider->stopFeed();
+}
+
+void PaperTraderApp::startFeed(MarketDataProvider::FeedMode mode, const QString &symbol)
+{
+    if (!m_dataProvider)
+        return;
+    m_dataProvider->startFeed(mode, symbol);
+}
+
+void PaperTraderApp::stopFeed()
+{
+    if (!m_dataProvider)
+        return;
     m_dataProvider->stopFeed();
 }

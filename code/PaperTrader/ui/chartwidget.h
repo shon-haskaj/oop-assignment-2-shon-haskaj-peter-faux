@@ -2,6 +2,7 @@
 #include <QWidget>
 #include <QVector>
 #include <QLoggingCategory>
+#include <QMargins>
 #include "core/models/candle.h"
 
 Q_DECLARE_LOGGING_CATEGORY(lcChart)
@@ -20,6 +21,7 @@ protected:
     void mousePressEvent(QMouseEvent *) override;
     void mouseMoveEvent(QMouseEvent *) override;
     void mouseReleaseEvent(QMouseEvent *) override;
+    void resizeEvent(QResizeEvent *event) override;
 
 private:
     QVector<Candle> m_candles;
@@ -33,12 +35,23 @@ private:
     QPoint m_lastMousePos;
     bool m_panning = false;
     bool m_followTail = true;
+    QMargins m_chartMargins{60, 20, 80, 40};
 
     int total() const { return static_cast<int>(m_candles.size()); }
     int pitch() const { return std::max(1, m_candleWidth + m_spacing); }
     void refreshVisibleFromWidth();
     void clampView();
     bool latestVisible() const;
-    void drawCandles(QPainter &p, int startIdx, int endIdx,
-                     double minPrice, double maxPrice);
+    QRect chartRect() const;
+    void drawCandles(QPainter &p, const QRect &area,
+                     int startIdx, int endIdx,
+                     double minPrice, double maxPrice,
+                     double yScale, double yOffset);
+    void drawGridAndAxes(QPainter &p, const QRect &area,
+                         int startIdx, int endIdx,
+                         double minPrice, double maxPrice,
+                         double yScale, double yOffset);
+    double priceToY(double price, double minPrice,
+                    const QRect &area, double yScale, double yOffset) const;
+    double niceStep(double rawStep) const;
 };

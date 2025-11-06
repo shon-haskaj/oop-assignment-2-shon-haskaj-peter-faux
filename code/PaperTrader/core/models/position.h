@@ -9,5 +9,6 @@ struct Position {
     double realizedPnL{};
     double unrealizedPnL{};
     double lastPrice{};
+    double shortCollateral{}; // Proceeds held when the position is short
 };
 #endif // POSITION_H

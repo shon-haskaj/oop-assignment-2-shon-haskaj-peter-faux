@@ -12,6 +12,8 @@ PaperTraderApp::PaperTraderApp(QObject *parent)
     m_portfolioManager = new PortfolioManager(this);
     m_storageManager = new StorageManager(this);
 
+    m_orderManager->setPortfolioManager(m_portfolioManager);
+
     QObject::connect(m_dataProvider, &MarketDataProvider::connectionStateChanged,
                      this, [](bool ok){ qCInfo(lcApp) << (ok ? "Connected" : "Disconnected"); });
 

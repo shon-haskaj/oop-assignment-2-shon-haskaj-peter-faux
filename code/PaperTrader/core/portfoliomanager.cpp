@@ -354,7 +354,6 @@ void PortfolioManager::applyFill(const Order &order)
     QMetaObject::invokeMethod(this, "emitSnapshot", Qt::QueuedConnection);
 }
 
-void PortfolioManager::onOrdersUpdated
 void PortfolioManager::onOrdersUpdated(const QList<Order> &orders)
 {
     m_openOrders.clear();

@@ -19,6 +19,7 @@
 #include <QEasingCurve>
 #include <QAbstractAnimation>
 #include <QSignalBlocker>
+#include <QStyle>
 
 #include <algorithm>
 #include <functional>
@@ -131,32 +132,47 @@ void MainWindow::setupUi()
     toolbarLayout->addWidget(m_stopButton);
     toolbarLayout->addWidget(m_statusLabel);
 
+    m_themeToggle = new QToolButton(this);
+    m_themeToggle->setObjectName("themeToggle");
+    m_themeToggle->setCheckable(true);
+    m_themeToggle->setChecked(false);
+    m_themeToggle->setText(QStringLiteral("🌙"));
+    m_themeToggle->setToolTip(tr("Switch to Light Mode"));
+    m_themeToggle->setAutoRaise(false);
+    toolbarLayout->addWidget(m_themeToggle);
+
     m_watchlistToggle = new QToolButton(this);
-    m_watchlistToggle->setObjectName("watchlistToggle");
+    m_watchlistToggle->setObjectName("panelToggle");
     m_watchlistToggle->setCheckable(true);
     m_watchlistToggle->setChecked(true);
-    m_watchlistToggle->setArrowType(Qt::RightArrow);
-    m_watchlistToggle->setToolTip(tr("Collapse watchlist"));
+    m_watchlistToggle->setIcon(style()->standardIcon(QStyle::SP_FileDialogListView));
+    m_watchlistToggle->setToolTip(tr("Hide watchlist"));
     m_watchlistToggle->setAutoRaise(false);
     m_watchlistToggle->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+    m_watchlistToggle->setProperty("panelRole", "watchlist");
+    m_watchlistToggle->setToolButtonStyle(Qt::ToolButtonIconOnly);
 
     m_orderToggleButton = new QToolButton(this);
-    m_orderToggleButton->setObjectName("orderToggle");
+    m_orderToggleButton->setObjectName("panelToggle");
     m_orderToggleButton->setCheckable(true);
     m_orderToggleButton->setChecked(true);
-    m_orderToggleButton->setArrowType(Qt::RightArrow);
-    m_orderToggleButton->setToolTip(tr("Collapse order ticket"));
+    m_orderToggleButton->setText(tr("Trade"));
+    m_orderToggleButton->setToolTip(tr("Hide trade ticket"));
     m_orderToggleButton->setAutoRaise(false);
     m_orderToggleButton->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+    m_orderToggleButton->setProperty("panelRole", "trade");
+    m_orderToggleButton->setToolButtonStyle(Qt::ToolButtonTextOnly);
 
     m_portfolioToggleButton = new QToolButton(this);
-    m_portfolioToggleButton->setObjectName("portfolioToggle");
+    m_portfolioToggleButton->setObjectName("panelToggle");
     m_portfolioToggleButton->setCheckable(true);
     m_portfolioToggleButton->setChecked(true);
-    m_portfolioToggleButton->setArrowType(Qt::DownArrow);
-    m_portfolioToggleButton->setToolTip(tr("Collapse portfolio panel"));
+    m_portfolioToggleButton->setText(tr("Portfolio"));
+    m_portfolioToggleButton->setToolTip(tr("Hide portfolio"));
     m_portfolioToggleButton->setAutoRaise(false);
     m_portfolioToggleButton->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+    m_portfolioToggleButton->setProperty("panelRole", "portfolio");
+    m_portfolioToggleButton->setToolButtonStyle(Qt::ToolButtonTextOnly);
 
     // Build a TradingView-inspired layout: central chart, right-side drawers, bottom portfolio dock.
     QSplitter *verticalSplit = new QSplitter(Qt::Vertical, this);
@@ -224,30 +240,9 @@ void MainWindow::setupUi()
     edgeDock->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Expanding);
     QVBoxLayout *edgeLayout = new QVBoxLayout(edgeDock);
     edgeLayout->setContentsMargins(0, 0, 0, 0);
-    edgeLayout->setSpacing(10);
-
-    QWidget *rightControls = new QWidget(edgeDock);
-    rightControls->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Preferred);
-    QHBoxLayout *controlsLayout = new QHBoxLayout(rightControls);
-    controlsLayout->setContentsMargins(0, 0, 0, 0);
-    controlsLayout->setSpacing(6);
-
-    QVBoxLayout *orderToggleColumn = new QVBoxLayout();
-    orderToggleColumn->setContentsMargins(0, 0, 0, 0);
-    orderToggleColumn->setSpacing(6);
-    orderToggleColumn->addWidget(m_orderToggleButton, 0, Qt::AlignTop);
-    orderToggleColumn->addStretch(1);
-
-    QVBoxLayout *watchToggleColumn = new QVBoxLayout();
-    watchToggleColumn->setContentsMargins(0, 0, 0, 0);
-    watchToggleColumn->setSpacing(6);
-    watchToggleColumn->addWidget(m_watchlistToggle, 0, Qt::AlignTop);
-    watchToggleColumn->addStretch(1);
-
-    controlsLayout->addLayout(orderToggleColumn);
-    controlsLayout->addLayout(watchToggleColumn);
-
-    edgeLayout->addWidget(rightControls, 0, Qt::AlignRight);
+    edgeLayout->setSpacing(12);
+    edgeLayout->addWidget(m_watchlistToggle, 0, Qt::AlignRight | Qt::AlignTop);
+    edgeLayout->addWidget(m_orderToggleButton, 0, Qt::AlignRight | Qt::AlignTop);
     edgeLayout->addStretch(1);
     edgeLayout->addWidget(m_portfolioToggleButton, 0, Qt::AlignRight | Qt::AlignBottom);
 
@@ -269,34 +264,7 @@ void MainWindow::setupUi()
     resize(1280, 720);
     statusBar()->setVisible(false);
 
-    setStyleSheet(
-        "QWidget { color: #e8ecf1; background-color: #0f111a; font-family: 'Inter', 'Segoe UI', sans-serif; }"
-        "QFrame#toolbar { background-color: #1c2030; border-radius: 10px; }"
-        "QFrame#watchlistPanel, QFrame#orderPanel, QFrame#portfolioPanel {"
-        " background-color: #161a26; border: 1px solid #252a3d; border-radius: 10px; }"
-        "QLineEdit, QComboBox { background-color: #111522; border: 1px solid #2c3249;"
-        " border-radius: 6px; padding: 4px 8px; }"
-        "QPushButton { background-color: #2151f2; border: none; border-radius: 6px;"
-        " padding: 6px 14px; color: white; font-weight: 600; }"
-        "QPushButton:hover { background-color: #3a65ff; }"
-        "QLabel#sectionTitle { font-weight: 600; font-size: 14px; color: #a7b5d8; }"
-        "QToolButton#watchlistToggle, QToolButton#orderToggle, QToolButton#portfolioToggle {"
-        " background-color: #13182a; border: 1px solid #2c3249; border-radius: 12px;"
-        " min-width: 34px; min-height: 60px; color: #a7b5d8; }"
-        "QToolButton#portfolioToggle { min-height: 34px; }"
-        "QToolButton#watchlistToggle[checked=\"false\"],"
-        "QToolButton#orderToggle[checked=\"false\"],"
-        "QToolButton#portfolioToggle[checked=\"false\"] {"
-        " background-color: #0e1220; color: #5c6688; }"
-        "QToolButton#watchlistToggle:hover, QToolButton#orderToggle:hover, QToolButton#portfolioToggle:hover {"
-        " background-color: #1f2640; }"
-        "QListWidget { background-color: #111522; border: 1px solid #2c3249;"
-        " border-radius: 6px; }"
-        "QTableWidget { background-color: #111522; border: 1px solid #2c3249;"
-        " border-radius: 6px; gridline-color: #1e2334; }"
-        "QHeaderView::section { background-color: #161c2c; border: none; color: #aab6d6; }"
-        "QLabel#metricValue { font-size: 18px; font-weight: 600; }"
-    );
+    applyTheme(m_theme);
 }
 
 void MainWindow::buildWatchlistPanel(QFrame *panel)
@@ -325,8 +293,8 @@ void MainWindow::buildWatchlistPanel(QFrame *panel)
     m_watchlistInput->setPlaceholderText("Add symbol");
     m_watchlistAddButton = new QPushButton("Add", panel);
     m_watchlistRemoveButton = new QPushButton("Remove", panel);
-    m_watchlistRemoveButton->setStyleSheet("QPushButton { background-color: #2b3249; }"
-                                          "QPushButton:hover { background-color: #39405b; }");
+    m_watchlistAddButton->setProperty("accent", "neutral");
+    m_watchlistRemoveButton->setProperty("accent", "neutral");
     inputLayout->addWidget(m_watchlistInput, 1);
     inputLayout->addWidget(m_watchlistAddButton);
     inputLayout->addWidget(m_watchlistRemoveButton);
@@ -399,6 +367,9 @@ void MainWindow::buildOrderPanel(QFrame *panel)
     m_placeOrderButton = new QPushButton("Place Order", panel);
     m_cancelOrderButton = new QPushButton("Cancel Selected", panel);
     m_cancelOrderButton->setEnabled(false);
+    m_placeOrderButton->setObjectName("tradeActionButton");
+    m_placeOrderButton->setProperty("accent", "buy");
+    m_cancelOrderButton->setProperty("accent", "neutral");
     buttonRow->addWidget(m_placeOrderButton, 1);
     buttonRow->addWidget(m_cancelOrderButton, 1);
     containerLayout->addLayout(buttonRow);
@@ -408,8 +379,8 @@ void MainWindow::buildOrderPanel(QFrame *panel)
     containerLayout->addWidget(ordersHeader);
 
     m_ordersTable = new QTableWidget(panel);
-    m_ordersTable->setColumnCount(7);
-    m_ordersTable->setHorizontalHeaderLabels({"ID", "Symbol", "Side", "Type", "Qty", "Price", "Status"});
+    m_ordersTable->setColumnCount(10);
+    m_ordersTable->setHorizontalHeaderLabels({"ID", "Symbol", "Side", "Type", "Requested", "Working", "Filled", "Price", "Fee", "Status"});
     m_ordersTable->horizontalHeader()->setStretchLastSection(true);
     m_ordersTable->horizontalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
     m_ordersTable->verticalHeader()->setVisible(false);
@@ -421,6 +392,7 @@ void MainWindow::buildOrderPanel(QFrame *panel)
     layout->addWidget(m_orderContainer);
 
     updateOrderPriceVisibility();
+    updateOrderButtonAccent();
 }
 
 void MainWindow::buildPortfolioPanel(QFrame *panel)
@@ -507,15 +479,17 @@ void MainWindow::setupConnections()
 
     connect(m_orderTypeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
             this, &MainWindow::onOrderTypeChanged);
+    connect(m_orderSideCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            this, &MainWindow::onOrderSideChanged);
     connect(m_placeOrderButton, &QPushButton::clicked,
             this, &MainWindow::onPlaceOrder);
     connect(m_cancelOrderButton, &QPushButton::clicked,
             this, &MainWindow::onCancelSelectedOrder);
+    connect(m_ordersTable, &QTableWidget::itemSelectionChanged,
+            this, &MainWindow::onOrderSelectionChanged);
 
-    if (auto *selection = m_ordersTable->selectionModel()) {
-        connect(selection, &QItemSelectionModel::selectionChanged,
-                this, &MainWindow::onOrderSelectionChanged);
-    }
+    connect(m_themeToggle, &QToolButton::toggled,
+            this, &MainWindow::onThemeToggled);
 
     if (auto provider = m_app->dataProvider()) {
         connect(provider, &MarketDataProvider::newCandle,
@@ -531,6 +505,8 @@ void MainWindow::setupConnections()
     if (m_orderManager) {
         connect(m_orderManager, &OrderManager::ordersChanged,
                 this, &MainWindow::refreshOrders);
+        connect(m_orderManager, &OrderManager::orderRejected,
+                this, &MainWindow::onOrderRejected);
         refreshOrders(m_orderManager->orders());
     }
 
@@ -664,6 +640,144 @@ OrderManager::OrderType MainWindow::currentOrderType() const
             : OrderManager::OrderType::Market;
 }
 
+void MainWindow::onOrderSideChanged(int)
+{
+    updateOrderButtonAccent();
+}
+
+void MainWindow::updateOrderButtonAccent()
+{
+    if (!m_placeOrderButton || !m_orderSideCombo)
+        return;
+
+    const QString side = m_orderSideCombo->currentText();
+    const bool isBuy = side.compare(QStringLiteral("Buy"), Qt::CaseInsensitive) == 0;
+    m_placeOrderButton->setProperty("accent", isBuy ? "buy" : "sell");
+    m_placeOrderButton->setText(isBuy ? tr("Buy") : tr("Sell / Short"));
+    m_placeOrderButton->style()->unpolish(m_placeOrderButton);
+    m_placeOrderButton->style()->polish(m_placeOrderButton);
+    m_placeOrderButton->update();
+}
+
+void MainWindow::updateToggleButtonState(QToolButton *button, bool active)
+{
+    if (!button)
+        return;
+    button->setProperty("active", active);
+    button->setChecked(active);
+    button->style()->unpolish(button);
+    button->style()->polish(button);
+    button->update();
+}
+
+QString MainWindow::errorCodeToMessage(const QString &code) const
+{
+    const QString upper = code.toUpper();
+    if (upper == QLatin1String("ERR_INVALID_QTY"))
+        return tr("Quantity must be positive");
+    if (upper == QLatin1String("ERR_INVALID_PRICE"))
+        return tr("Enter a valid price");
+    if (upper == QLatin1String("ERR_INVALID_SYMBOL"))
+        return tr("Enter a symbol");
+    if (upper == QLatin1String("ERR_INVALID_SIDE"))
+        return tr("Unsupported order side");
+    if (upper == QLatin1String("ERR_INSUFFICIENT_FUNDS"))
+        return tr("Insufficient available funds");
+    if (upper == QLatin1String("ERR_INSUFFICIENT_MARGIN"))
+        return tr("Insufficient margin");
+    if (upper == QLatin1String("ERR_PARTIAL_FILL"))
+        return tr("Partial fill");
+    return code;
+}
+
+void MainWindow::applyTheme(Theme theme)
+{
+    m_theme = theme;
+    if (m_themeToggle) {
+        const QSignalBlocker blocker(m_themeToggle);
+        const bool light = theme == Theme::Light;
+        m_themeToggle->setChecked(light);
+        m_themeToggle->setText(light ? QStringLiteral("☀️") : QStringLiteral("🌙"));
+        m_themeToggle->setToolTip(light ? tr("Switch to Dark Mode")
+                                        : tr("Switch to Light Mode"));
+        m_themeToggle->style()->unpolish(m_themeToggle);
+        m_themeToggle->style()->polish(m_themeToggle);
+        m_themeToggle->update();
+    }
+
+    setStyleSheet(styleSheetForTheme(theme));
+    updateOrderButtonAccent();
+    updateToggleButtonState(m_watchlistToggle, m_watchlistToggle && m_watchlistToggle->isChecked());
+    updateToggleButtonState(m_orderToggleButton, m_orderToggleButton && m_orderToggleButton->isChecked());
+    updateToggleButtonState(m_portfolioToggleButton, m_portfolioToggleButton && m_portfolioToggleButton->isChecked());
+}
+
+QString MainWindow::styleSheetForTheme(Theme theme) const
+{
+    if (theme == Theme::Light) {
+        return QStringLiteral(
+            "QWidget { color: #1b2332; background-color: #f5f6fa; font-family: 'Inter', 'Segoe UI', sans-serif; }"
+            "QFrame#toolbar { background-color: #ffffff; border-radius: 10px; border: 1px solid #dce1f0; }"
+            "QFrame#watchlistPanel, QFrame#orderPanel, QFrame#portfolioPanel { background-color: #ffffff; border-radius: 10px; border: 1px solid #d4d9e5; }"
+            "QLineEdit, QComboBox { background-color: #eef1f8; border: 1px solid #c7cedd; border-radius: 6px; padding: 4px 8px; color: #1b2332; }"
+            "QPushButton#tradeActionButton[accent=\"buy\"] { background-color: #2f6df7; color: #ffffff; border-radius: 6px; padding: 6px 16px; font-weight: 600; }"
+            "QPushButton#tradeActionButton[accent=\"buy\"]:hover { background-color: #3a77ff; }"
+            "QPushButton#tradeActionButton[accent=\"sell\"] { background-color: #e04646; color: #ffffff; border-radius: 6px; padding: 6px 16px; font-weight: 600; }"
+            "QPushButton#tradeActionButton[accent=\"sell\"]:hover { background-color: #eb5959; }"
+            "QPushButton[accent=\"neutral\"] { background-color: #d7dcea; color: #1b2332; border-radius: 6px; padding: 6px 14px; }"
+            "QPushButton[accent=\"neutral\"]:hover { background-color: #c9cfe0; }"
+            "QToolButton#panelToggle { min-width: 44px; min-height: 44px; border-radius: 14px; border: 1px solid #ccd2e2; background-color: #eef1f8; color: #4a556f; font-weight: 600; }"
+            "QToolButton#panelToggle[active=\"true\"] { background-color: #d9def0; color: #1b2332; }"
+            "QToolButton#panelToggle:hover { background-color: #d0d6ea; }"
+            "QToolButton#themeToggle { border: 1px solid #ccd2e2; border-radius: 12px; background-color: #eef1f8; padding: 4px 10px; }"
+            "QToolButton#themeToggle:hover { background-color: #d9def0; }"
+            "QListWidget, QTableWidget { background-color: #ffffff; border: 1px solid #d4d9e5; border-radius: 8px; color: #1b2332; }"
+            "QHeaderView::section { background-color: #eef1f8; border: none; color: #4a556f; }"
+            "QLabel#sectionTitle { font-weight: 600; font-size: 14px; color: #4a556f; }"
+            "QLabel#metricValue { font-size: 18px; font-weight: 600; color: #1b2332; }"
+        );
+    }
+
+    return QStringLiteral(
+        "QWidget { color: #e6ecf4; background-color: #10131b; font-family: 'Inter', 'Segoe UI', sans-serif; }"
+        "QFrame#toolbar { background-color: #191e2b; border-radius: 10px; }"
+        "QFrame#watchlistPanel, QFrame#orderPanel, QFrame#portfolioPanel { background-color: #161b2a; border-radius: 10px; border: 1px solid rgba(70, 80, 110, 0.6); }"
+        "QLineEdit, QComboBox { background-color: #0f1320; border: 1px solid #2f3850; border-radius: 6px; padding: 4px 8px; color: #e6ecf4; }"
+        "QPushButton#tradeActionButton[accent=\"buy\"] { background-color: #3366ff; color: #ffffff; border-radius: 6px; padding: 6px 16px; font-weight: 600; }"
+        "QPushButton#tradeActionButton[accent=\"buy\"]:hover { background-color: #3f74ff; }"
+        "QPushButton#tradeActionButton[accent=\"sell\"] { background-color: #ef5361; color: #ffffff; border-radius: 6px; padding: 6px 16px; font-weight: 600; }"
+        "QPushButton#tradeActionButton[accent=\"sell\"]:hover { background-color: #f16d78; }"
+        "QPushButton[accent=\"neutral\"] { background-color: #2a3145; color: #d7dbea; border-radius: 6px; padding: 6px 14px; }"
+        "QPushButton[accent=\"neutral\"]:hover { background-color: #343c56; }"
+        "QToolButton#panelToggle { min-width: 44px; min-height: 44px; border-radius: 14px; border: 1px solid rgba(70, 80, 110, 0.7); background-color: #121622; color: #aeb6d9; font-weight: 600; }"
+        "QToolButton#panelToggle[active=\"true\"] { background-color: #1f2640; color: #eef2ff; }"
+        "QToolButton#panelToggle:hover { background-color: #283051; }"
+        "QToolButton#themeToggle { border: 1px solid rgba(70, 80, 110, 0.7); border-radius: 12px; background-color: #121622; padding: 4px 10px; color: #e6ecf4; }"
+        "QToolButton#themeToggle:hover { background-color: #1f2640; }"
+        "QListWidget, QTableWidget { background-color: #0f1320; border: 1px solid #2f3850; border-radius: 8px; color: #e6ecf4; }"
+        "QHeaderView::section { background-color: #1b2133; border: none; color: #aeb6d9; }"
+        "QLabel#sectionTitle { font-weight: 600; font-size: 14px; color: #aeb6d9; }"
+        "QLabel#metricValue { font-size: 18px; font-weight: 600; color: #e6ecf4; }"
+    );
+}
+
+void MainWindow::onOrderRejected(const QString &symbol, const QString &errorCode, double rejectedQuantity)
+{
+    QString message = errorCodeToMessage(errorCode);
+    if (rejectedQuantity > 0.0) {
+        QLocale locale;
+        message = tr("%1 (rejected %2)")
+                      .arg(message,
+                           locale.toString(rejectedQuantity, 'f', m_quantityPrecision));
+    }
+    m_statusLabel->setText(tr("⚠️ %1 [%2]").arg(message, symbol));
+}
+
+void MainWindow::onThemeToggled(bool checked)
+{
+    applyTheme(checked ? Theme::Light : Theme::Dark);
+}
+
 void MainWindow::toggleWatchlistPanel(bool expanded, bool animate)
 {
     if (m_watchlistToggle) {
@@ -671,9 +785,9 @@ void MainWindow::toggleWatchlistPanel(bool expanded, bool animate)
             const QSignalBlocker blocker(m_watchlistToggle);
             m_watchlistToggle->setChecked(expanded);
         }
-        m_watchlistToggle->setArrowType(expanded ? Qt::RightArrow : Qt::LeftArrow);
-        m_watchlistToggle->setToolTip(expanded ? tr("Collapse watchlist")
-                                               : tr("Expand watchlist"));
+        m_watchlistToggle->setToolTip(expanded ? tr("Hide watchlist")
+                                               : tr("Show watchlist"));
+        updateToggleButtonState(m_watchlistToggle, expanded);
     }
 
     if (!m_horizontalSplit || !m_watchlistPanelWidget || !m_chartPanelWidget)
@@ -729,9 +843,9 @@ void MainWindow::toggleOrderPanel(bool expanded, bool animate)
             const QSignalBlocker blocker(m_orderToggleButton);
             m_orderToggleButton->setChecked(expanded);
         }
-        m_orderToggleButton->setArrowType(expanded ? Qt::RightArrow : Qt::LeftArrow);
-        m_orderToggleButton->setToolTip(expanded ? tr("Collapse order ticket")
-                                                 : tr("Expand order ticket"));
+        m_orderToggleButton->setToolTip(expanded ? tr("Hide trade ticket")
+                                                 : tr("Show trade ticket"));
+        updateToggleButtonState(m_orderToggleButton, expanded);
     }
 
     if (!m_horizontalSplit || !m_orderPanelWidget || !m_chartPanelWidget)
@@ -787,9 +901,9 @@ void MainWindow::togglePortfolioPanel(bool expanded, bool animate)
             const QSignalBlocker blocker(m_portfolioToggleButton);
             m_portfolioToggleButton->setChecked(expanded);
         }
-        m_portfolioToggleButton->setArrowType(expanded ? Qt::DownArrow : Qt::UpArrow);
-        m_portfolioToggleButton->setToolTip(expanded ? tr("Collapse portfolio panel")
-                                                     : tr("Expand portfolio panel"));
+        m_portfolioToggleButton->setToolTip(expanded ? tr("Hide portfolio")
+                                                     : tr("Show portfolio"));
+        updateToggleButtonState(m_portfolioToggleButton, expanded);
     }
 
     if (m_portfolioContent)
@@ -866,18 +980,46 @@ void MainWindow::onPlaceOrder()
         price = m_lastPrice;
     }
 
-    const int id = m_orderManager->placeOrder(type, symbol, side, quantity, price);
-    if (id < 0) {
-        m_statusLabel->setText("⚠️ Order rejected");
-    } else {
-        m_statusLabel->setText("✅ Order sent");
-        if (!m_watchlist.contains(symbol)) {
-            m_watchlist.append(symbol);
-            populateWatchlist(symbol);
-            persistWatchlist();
+    const OrderManager::OrderPlacementResult result = m_orderManager->placeOrder(type, symbol, side, quantity, price);
+
+    if (!result.accepted) {
+        m_statusLabel->setText(QStringLiteral("❌ %1").arg(errorCodeToMessage(result.errorCode)));
+        return;
+    }
+
+    QString statusText;
+    if (result.partial) {
+        const QString reason = result.errorCode.isEmpty()
+                ? tr("Partial fill")
+                : errorCodeToMessage(result.errorCode);
+        const double rejectedQty = result.rejectedQuantity;
+        if (rejectedQty > 0.0) {
+            auto formatQty = [this](double value) {
+                QString text = QString::number(value, 'f', m_quantityPrecision);
+                if (text.contains('.')) {
+                    while (text.endsWith('0'))
+                        text.chop(1);
+                    if (text.endsWith('.'))
+                        text.chop(1);
+                }
+                return text;
+            };
+            statusText = tr("⚠️ %1 (rejected %2)")
+                    .arg(reason, formatQty(rejectedQty));
         } else {
-            populateWatchlist(symbol);
+            statusText = tr("⚠️ %1").arg(reason);
         }
+    } else {
+        statusText = tr("✅ Order sent");
+    }
+    m_statusLabel->setText(statusText);
+
+    if (!m_watchlist.contains(symbol)) {
+        m_watchlist.append(symbol);
+        populateWatchlist(symbol);
+        persistWatchlist();
+    } else {
+        populateWatchlist(symbol);
     }
 }
 
@@ -885,7 +1027,10 @@ void MainWindow::onCancelSelectedOrder()
 {
     if (!m_orderManager)
         return;
-    auto selected = m_ordersTable->selectionModel()->selectedRows();
+    auto *selection = m_ordersTable->selectionModel();
+    if (!selection)
+        return;
+    const QModelIndexList selected = selection->selectedRows();
     if (selected.isEmpty())
         return;
     const int row = selected.first().row();
@@ -903,9 +1048,9 @@ void MainWindow::onCancelSelectedOrder()
 
 void MainWindow::onOrderSelectionChanged()
 {
-    const auto *selection = m_ordersTable->selectionModel();
-    const bool hasSelection = selection && !selection->selectedRows().isEmpty();
-    m_cancelOrderButton->setEnabled(hasSelection);
+    const bool hasSelection = !m_ordersTable->selectedItems().isEmpty();
+    if (m_cancelOrderButton)
+        m_cancelOrderButton->setEnabled(hasSelection);
 }
 
 void MainWindow::refreshOrders(const QList<Order> &orders)
@@ -924,9 +1069,11 @@ void MainWindow::refreshOrders(const QList<Order> &orders)
     };
     QLocale locale;
     for (const Order &order : orders) {
-        auto setItem = [&](int column, const QString &text) {
+        auto makeItem = [&](int column, const QString &text) {
             auto *item = new QTableWidgetItem(text);
             item->setFlags(Qt::ItemIsSelectable | Qt::ItemIsEnabled);
+            if (column == 9 && !order.errorCode.isEmpty())
+                item->setToolTip(errorCodeToMessage(order.errorCode));
             m_ordersTable->setItem(row, column, item);
         };
 
@@ -935,13 +1082,22 @@ void MainWindow::refreshOrders(const QList<Order> &orders)
         idItem->setFlags(Qt::ItemIsSelectable | Qt::ItemIsEnabled);
         m_ordersTable->setItem(row, 0, idItem);
 
-        setItem(1, order.symbol);
-        setItem(2, order.side);
-        setItem(3, order.type);
-        setItem(4, formatQuantity(order.quantity));
+        makeItem(1, order.symbol);
+        makeItem(2, order.side);
+        makeItem(3, order.type);
+        const double requested = order.requestedQuantity > 0.0
+                ? order.requestedQuantity
+                : order.quantity;
+        makeItem(4, formatQuantity(requested));
+        makeItem(5, formatQuantity(order.quantity));
+        makeItem(6, formatQuantity(order.filledQuantity));
         const double displayPrice = order.filledPrice > 0.0 ? order.filledPrice : order.price;
-        setItem(5, locale.toString(displayPrice, 'f', 2));
-        setItem(6, order.status);
+        makeItem(7, locale.toString(displayPrice, 'f', 2));
+        makeItem(8, locale.toString(order.fee, 'f', 2));
+        QString status = order.status;
+        if (!order.errorCode.isEmpty())
+            status.append(QStringLiteral(" (%1)").arg(order.errorCode));
+        makeItem(9, status);
         ++row;
     }
     onOrderSelectionChanged();

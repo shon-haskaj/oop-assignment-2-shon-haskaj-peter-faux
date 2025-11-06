@@ -35,6 +35,7 @@ private slots:
     void onWatchlistSymbolActivated(QListWidgetItem *item);
     void onRemoveWatchlistSymbol();
     void onOrderTypeChanged(int index);
+    void onOrderSideChanged(int index);
     void onPlaceOrder();
     void onCancelSelectedOrder();
     void onOrderSelectionChanged();
@@ -42,6 +43,8 @@ private slots:
     void refreshPortfolio(const PortfolioSnapshot &snapshot, const QList<Position> &positions);
     void onOrderPanelToggled(bool expanded);
     void onPortfolioToggled(bool expanded);
+    void onOrderRejected(const QString &symbol, const QString &errorCode, double rejectedQuantity);
+    void onThemeToggled(bool checked);
 
 private:
     PaperTraderApp *m_app;
@@ -53,6 +56,7 @@ private:
     QPushButton *m_startButton;
     QPushButton *m_stopButton;
     QLabel     *m_statusLabel;
+    QToolButton *m_themeToggle;
 
     // Watchlist UI
     QToolButton *m_watchlistToggle;
@@ -111,6 +115,9 @@ private:
 
     MarketDataProvider::FeedMode m_currentMode = MarketDataProvider::FeedMode::Synthetic;
 
+    enum class Theme { Dark, Light };
+    Theme m_theme = Theme::Dark;
+
     void setupUi();
     void setupConnections();
     void buildWatchlistPanel(QFrame *panel);
@@ -125,4 +132,9 @@ private:
     void toggleWatchlistPanel(bool expanded, bool animate);
     void toggleOrderPanel(bool expanded, bool animate);
     void togglePortfolioPanel(bool expanded, bool animate);
+    void updateOrderButtonAccent();
+    void updateToggleButtonState(QToolButton *button, bool active);
+    QString errorCodeToMessage(const QString &code) const;
+    void applyTheme(Theme theme);
+    QString styleSheetForTheme(Theme theme) const;
 };

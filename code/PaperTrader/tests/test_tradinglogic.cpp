@@ -25,6 +25,8 @@ private slots:
     void test_marketSellShort();
     void test_longSideFlip();
     void test_shortSideFlip();
+    void test_exampleShortThenCover();
+    void test_examplePartialLongClose();
     void test_buyRejectedForFunds();
     void test_shortRejectedForMargin();
     void test_limitBuyRejected();
@@ -78,7 +80,7 @@ void TradingLogicTests::test_marketBuyLong()
     QCOMPARE(pos.symbol, QStringLiteral("BTCUSDT"));
     VERIFY_NEAR(pos.qty, 1.25, 1e-9);
     VERIFY_NEAR(pos.avgPx, 20000.0, 1e-6);
-    VERIFY_NEAR(pos.shortCollateral, 0.0, 1e-6);
+    VERIFY_NEAR(pos.entryFees, pm.estimateFee(20000.0, 1.25), 1e-6);
 }
 
 void TradingLogicTests::test_marketSellShort()
@@ -106,7 +108,7 @@ void TradingLogicTests::test_marketSellShort()
     const Position &pos = positions.first();
     VERIFY_NEAR(pos.qty, -0.5, 1e-9);
     VERIFY_NEAR(pos.avgPx, 100.0, 1e-6);
-    VERIFY_NEAR(pos.shortCollateral, 50.0, 1e-6);
+    VERIFY_NEAR(pos.entryFees, pm.estimateFee(100.0, 0.5), 1e-6);
 }
 
 void TradingLogicTests::test_longSideFlip()
@@ -128,14 +130,14 @@ void TradingLogicTests::test_longSideFlip()
     const auto snapshot = pm.snapshot();
     VERIFY_NEAR(snapshot.accountBalance, 100593.64, 1e-2);
     VERIFY_NEAR(snapshot.accountMargin, 1650.0, 1e-2); // 30 short * 110 * 0.5
-    VERIFY_NEAR(snapshot.realizedPnL, 597.36, 1e-2);
+    VERIFY_NEAR(snapshot.realizedPnL, 594.96, 1e-2);
 
     const auto positions = pm.positions();
     QCOMPARE(positions.size(), 1);
     const Position &pos = positions.first();
     VERIFY_NEAR(pos.qty, -30.0, 1e-6);
     VERIFY_NEAR(pos.avgPx, 110.0, 1e-6);
-    VERIFY_NEAR(pos.shortCollateral, 3300.0, 1e-6);
+    VERIFY_NEAR(pos.entryFees, pm.estimateFee(110.0, 30.0), 1e-6);
 }
 
 void TradingLogicTests::test_shortSideFlip()
@@ -158,8 +160,8 @@ void TradingLogicTests::test_shortSideFlip()
     QVERIFY(!flip.partial);
 
     const auto snapshot = pm.snapshot();
-    VERIFY_NEAR(snapshot.accountBalance, 96585.636, 1e-3);
-    VERIFY_NEAR(snapshot.realizedPnL, 188.576, 1e-3);
+    VERIFY_NEAR(snapshot.accountBalance, 92835.636, 1e-3);
+    VERIFY_NEAR(snapshot.realizedPnL, 187.076, 1e-3);
     VERIFY_NEAR(snapshot.accountMargin, 0.0, 1e-6); // fully long afterwards
 
     const auto positions = pm.positions();
@@ -167,7 +169,75 @@ void TradingLogicTests::test_shortSideFlip()
     const Position &pos = positions.first();
     VERIFY_NEAR(pos.qty, 50.0, 1e-6);
     VERIFY_NEAR(pos.avgPx, 72.0, 1e-6);
-    VERIFY_NEAR(pos.shortCollateral, 0.0, 1e-6);
+    VERIFY_NEAR(pos.entryFees, pm.estimateFee(72.0, 50.0), 1e-6);
+}
+
+void TradingLogicTests::test_exampleShortThenCover()
+{
+    // Example 1 from the accounting brief: short 1 @3300.54 then cover @3295.77.
+    PortfolioManager pm;
+    OrderManager om;
+    om.setPortfolioManager(&pm);
+    connectManagers(om, pm);
+
+    const double entryPrice = 3300.54;
+    const double coverPrice = 3295.77;
+    const double entryFee = pm.estimateFee(entryPrice, 1.0);
+    const double coverFee = pm.estimateFee(coverPrice, 1.0);
+
+    om.setLastPrice("EX1", entryPrice);
+    om.placeOrder(OrderManager::OrderType::Market, "EX1", "SELL", 1.0, entryPrice);
+
+    om.setLastPrice("EX1", coverPrice);
+    om.placeOrder(OrderManager::OrderType::Market, "EX1", "BUY", 1.0, coverPrice);
+
+    const auto snapshot = pm.snapshot();
+    const double expectedCash = 100000.0 - entryFee - coverFee - coverPrice;
+    const double expectedRealized = (entryPrice - coverPrice) - entryFee - coverFee;
+
+    VERIFY_NEAR(snapshot.accountBalance, expectedCash, 1e-6);
+    VERIFY_NEAR(snapshot.realizedPnL, expectedRealized, 1e-6);
+    VERIFY_NEAR(snapshot.accountMargin, 0.0, 1e-6);
+    VERIFY_NEAR(snapshot.unrealizedPnL, 0.0, 1e-6);
+    QVERIFY(pm.positions().isEmpty());
+}
+
+void TradingLogicTests::test_examplePartialLongClose()
+{
+    // Example 2: buy 2 @100 then sell 0.5 @105 and track proportional fees.
+    PortfolioManager pm;
+    OrderManager om;
+    om.setPortfolioManager(&pm);
+    connectManagers(om, pm);
+
+    const double buyPrice = 100.0;
+    const double sellPrice = 105.0;
+    const double buyQty = 2.0;
+    const double sellQty = 0.5;
+    const double buyFee = pm.estimateFee(buyPrice, buyQty);
+    const double sellFee = pm.estimateFee(sellPrice, sellQty);
+    const double entryFeeShare = buyFee * (sellQty / buyQty);
+
+    om.setLastPrice("EX2", buyPrice);
+    om.placeOrder(OrderManager::OrderType::Market, "EX2", "BUY", buyQty, buyPrice);
+
+    om.setLastPrice("EX2", sellPrice);
+    om.placeOrder(OrderManager::OrderType::Market, "EX2", "SELL", sellQty, sellPrice);
+
+    const auto snapshot = pm.snapshot();
+    const double expectedCash = 100000.0 - buyPrice * buyQty - buyFee
+            + sellPrice * sellQty - sellFee;
+    const double expectedRealized = (sellPrice - buyPrice) * sellQty - entryFeeShare - sellFee;
+
+    VERIFY_NEAR(snapshot.accountBalance, expectedCash, 1e-6);
+    VERIFY_NEAR(snapshot.realizedPnL, expectedRealized, 1e-6);
+
+    const auto positions = pm.positions();
+    QCOMPARE(positions.size(), 1);
+    const Position &pos = positions.first();
+    VERIFY_NEAR(pos.qty, buyQty - sellQty, 1e-9);
+    VERIFY_NEAR(pos.avgPx, buyPrice, 1e-6);
+    VERIFY_NEAR(pos.entryFees, buyFee - entryFeeShare, 1e-6);
 }
 
 void TradingLogicTests::test_buyRejectedForFunds()
@@ -288,8 +358,8 @@ void TradingLogicTests::test_feeHandlingOnClose()
     QVERIFY(!exit.partial);
 
     const auto snapshot = pm.snapshot();
-    VERIFY_NEAR(snapshot.accountBalance, 99792.8, 1e-3); // 100000 - 1000 - 4 + 800 - 3.2
-    VERIFY_NEAR(snapshot.realizedPnL, -203.2, 1e-3);
+    VERIFY_NEAR(snapshot.accountBalance, 99799.28, 1e-3); // 100000 - 1000 - 0.4 + 800 - 0.32
+    VERIFY_NEAR(snapshot.realizedPnL, -200.72, 1e-3);
     QVERIFY(pm.positions().isEmpty());
 }
 

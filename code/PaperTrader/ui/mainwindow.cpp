@@ -13,6 +13,7 @@
 #include <QLabel>
 #include <QDoubleValidator>
 #include <QLocale>
+#include <QLatin1StringView>
 #include <QJsonObject>
 #include <QItemSelectionModel>
 #include <QVariantAnimation>
@@ -337,7 +338,8 @@ void MainWindow::buildOrderPanel(QFrame *panel)
     m_orderTypeCombo->addItems({"Market", "Limit"});
 
     m_orderSideCombo = new QComboBox(panel);
-    m_orderSideCombo->addItems({"Buy", "Sell"});
+    m_orderSideCombo->addItem(tr("Buy"), QStringLiteral("BUY"));
+    m_orderSideCombo->addItem(tr("Sell"), QStringLiteral("SELL"));
 
     m_orderQtyEdit = new QLineEdit(panel);
     m_orderQtyEdit->setPlaceholderText("Quantity");
@@ -650,8 +652,13 @@ void MainWindow::updateOrderButtonAccent()
     if (!m_placeOrderButton || !m_orderSideCombo)
         return;
 
-    const QString side = m_orderSideCombo->currentText();
-    const bool isBuy = side.compare(QStringLiteral("Buy"), Qt::CaseInsensitive) == 0;
+    QString sideCode = m_orderSideCombo->currentData().toString();
+    if (sideCode.isEmpty()) {
+        sideCode = (m_orderSideCombo->currentIndex() == 0)
+                ? QStringLiteral("BUY")
+                : QStringLiteral("SELL");
+    }
+    const bool isBuy = sideCode.compare(QStringLiteral("BUY"), Qt::CaseInsensitive) == 0;
     m_placeOrderButton->setProperty("accent", isBuy ? "buy" : "sell");
     m_placeOrderButton->setText(isBuy ? tr("Buy") : tr("Sell / Short"));
     m_placeOrderButton->style()->unpolish(m_placeOrderButton);
@@ -672,22 +679,32 @@ void MainWindow::updateToggleButtonState(QToolButton *button, bool active)
 
 QString MainWindow::errorCodeToMessage(const QString &code) const
 {
-    const QString upper = code.toUpper();
-    if (upper == QLatin1String("ERR_INVALID_QTY"))
+    if (code.isEmpty())
+        return code;
+
+    const QString trimmed = code.trimmed();
+    const auto equals = [&trimmed](QLatin1StringView token) {
+        return trimmed.compare(token, Qt::CaseInsensitive) == 0;
+    };
+
+    if (equals(QLatin1StringView("ERR_INVALID_QTY")))
         return tr("Quantity must be positive");
-    if (upper == QLatin1String("ERR_INVALID_PRICE"))
+    if (equals(QLatin1StringView("ERR_INVALID_PRICE")))
         return tr("Enter a valid price");
-    if (upper == QLatin1String("ERR_INVALID_SYMBOL"))
+    if (equals(QLatin1StringView("ERR_INVALID_SYMBOL")))
         return tr("Enter a symbol");
-    if (upper == QLatin1String("ERR_INVALID_SIDE"))
+    if (equals(QLatin1StringView("ERR_INVALID_SIDE")))
         return tr("Unsupported order side");
-    if (upper == QLatin1String("ERR_INSUFFICIENT_FUNDS"))
+    if (equals(QLatin1StringView("ERR_INSUFFICIENT_FUNDS")))
         return tr("Insufficient available funds");
-    if (upper == QLatin1String("ERR_INSUFFICIENT_MARGIN"))
+    if (equals(QLatin1StringView("ERR_INSUFFICIENT_MARGIN")))
         return tr("Insufficient margin");
-    if (upper == QLatin1String("ERR_PARTIAL_FILL"))
+    if (equals(QLatin1StringView("ERR_PARTIAL_FILL")))
         return tr("Partial fill");
-    return code;
+    if (equals(QLatin1StringView("ERR_REJECTED")))
+        return tr("Order rejected");
+
+    return trimmed;
 }
 
 void MainWindow::applyTheme(Theme theme)
@@ -957,7 +974,13 @@ void MainWindow::onPlaceOrder()
         return;
 
     const QString symbol = m_symbolEdit->text().trimmed().toUpper();
-    const QString side = m_orderSideCombo->currentText().toUpper();
+    QString side = m_orderSideCombo->currentData().toString();
+    if (side.isEmpty()) {
+        side = (m_orderSideCombo->currentIndex() == 0)
+                ? QStringLiteral("BUY")
+                : QStringLiteral("SELL");
+    }
+    side = side.trimmed().toUpper();
     const double quantity = m_orderQtyEdit->text().toDouble();
     double price = m_orderPriceEdit->text().toDouble();
 

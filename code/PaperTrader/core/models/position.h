@@ -8,5 +8,6 @@ struct Position {
     double avgPx{};
     double realizedPnL{};
     double unrealizedPnL{};
+    double lastPrice{};
 };
 #endif // POSITION_H

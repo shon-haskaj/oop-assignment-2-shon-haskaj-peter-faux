@@ -11,4 +11,6 @@ struct Order {
     QString type;     // "Market", "Limit", etc.
     QString status;   // "Open", "Filled", "Cancelled"
     QDateTime timestamp;
+    double filledPrice = 0.0;
+    int filledQuantity = 0;
 };

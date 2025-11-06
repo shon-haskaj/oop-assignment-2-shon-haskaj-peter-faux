@@ -15,6 +15,66 @@
 #include <QLocale>
 #include <QJsonObject>
 #include <QItemSelectionModel>
+#include <QVariantAnimation>
+#include <QEasingCurve>
+#include <QAbstractAnimation>
+#include <QSignalBlocker>
+
+#include <algorithm>
+#include <functional>
+
+namespace {
+void animateSplitterSizes(QSplitter *splitter,
+                          const QList<int> &startSizes,
+                          const QList<int> &targetSizes,
+                          const std::function<void()> &finished = {})
+{
+    if (!splitter) {
+        if (finished)
+            finished();
+        return;
+    }
+
+    if (startSizes.size() != targetSizes.size()) {
+        splitter->setSizes(targetSizes);
+        if (finished)
+            finished();
+        return;
+    }
+
+    if (startSizes == targetSizes) {
+        splitter->setSizes(targetSizes);
+        if (finished)
+            finished();
+        return;
+    }
+
+    auto *animation = new QVariantAnimation(splitter);
+    animation->setDuration(200);
+    animation->setEasingCurve(QEasingCurve::InOutCubic);
+    animation->setStartValue(0.0);
+    animation->setEndValue(1.0);
+    QObject::connect(animation, &QVariantAnimation::valueChanged,
+                     splitter, [splitter, startSizes, targetSizes](const QVariant &value) {
+                         const double progress = value.toDouble();
+                         QList<int> newSizes;
+                         newSizes.reserve(targetSizes.size());
+                         for (int i = 0; i < targetSizes.size(); ++i) {
+                             const int start = startSizes.at(i);
+                             const int end = targetSizes.at(i);
+                             const double interpolated = start + (end - start) * progress;
+                             newSizes.append(static_cast<int>(interpolated));
+                         }
+                         splitter->setSizes(newSizes);
+                     });
+    QObject::connect(animation, &QVariantAnimation::finished,
+                     splitter, [finished]() {
+                         if (finished)
+                             finished();
+                     });
+    animation->start(QAbstractAnimation::DeleteWhenStopped);
+}
+}
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent),
@@ -71,6 +131,33 @@ void MainWindow::setupUi()
     toolbarLayout->addWidget(m_stopButton);
     toolbarLayout->addWidget(m_statusLabel);
 
+    m_watchlistToggle = new QToolButton(this);
+    m_watchlistToggle->setObjectName("watchlistToggle");
+    m_watchlistToggle->setCheckable(true);
+    m_watchlistToggle->setChecked(true);
+    m_watchlistToggle->setArrowType(Qt::RightArrow);
+    m_watchlistToggle->setToolTip(tr("Collapse watchlist"));
+    m_watchlistToggle->setAutoRaise(false);
+    m_watchlistToggle->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+
+    m_orderToggleButton = new QToolButton(this);
+    m_orderToggleButton->setObjectName("orderToggle");
+    m_orderToggleButton->setCheckable(true);
+    m_orderToggleButton->setChecked(true);
+    m_orderToggleButton->setArrowType(Qt::RightArrow);
+    m_orderToggleButton->setToolTip(tr("Collapse order ticket"));
+    m_orderToggleButton->setAutoRaise(false);
+    m_orderToggleButton->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+
+    m_portfolioToggleButton = new QToolButton(this);
+    m_portfolioToggleButton->setObjectName("portfolioToggle");
+    m_portfolioToggleButton->setCheckable(true);
+    m_portfolioToggleButton->setChecked(true);
+    m_portfolioToggleButton->setArrowType(Qt::DownArrow);
+    m_portfolioToggleButton->setToolTip(tr("Collapse portfolio panel"));
+    m_portfolioToggleButton->setAutoRaise(false);
+    m_portfolioToggleButton->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+
     // Build a TradingView-inspired layout: central chart, right-side drawers, bottom portfolio dock.
     QSplitter *verticalSplit = new QSplitter(Qt::Vertical, this);
     verticalSplit->setChildrenCollapsible(false);
@@ -84,6 +171,8 @@ void MainWindow::setupUi()
     QSplitter *horizontalSplit = new QSplitter(Qt::Horizontal, topArea);
     horizontalSplit->setChildrenCollapsible(false);
     horizontalSplit->setHandleWidth(2);
+    horizontalSplit->setCollapsible(1, true);
+    horizontalSplit->setCollapsible(2, true);
 
     QFrame *chartPanel = new QFrame(horizontalSplit);
     chartPanel->setObjectName("chartPanel");
@@ -116,13 +205,64 @@ void MainWindow::setupUi()
     verticalSplit->addWidget(portfolioPanel);
     verticalSplit->setStretchFactor(0, 1);
     verticalSplit->setStretchFactor(1, 0);
+    verticalSplit->setCollapsible(1, true);
+
+    m_horizontalSplit = horizontalSplit;
+    m_verticalSplit = verticalSplit;
+    m_chartPanelWidget = chartPanel;
+    m_orderPanelWidget = orderPanel;
+    m_watchlistPanelWidget = watchlistPanel;
+    m_topAreaWidget = topArea;
+    m_portfolioPanelWidget = portfolioPanel;
+
+    m_savedWatchlistWidth = watchlistPanel->sizeHint().width();
+    m_savedOrderWidth = orderPanel->sizeHint().width();
+    m_savedPortfolioHeight = portfolioPanel->sizeHint().height();
+
+    QWidget *edgeDock = new QWidget(this);
+    edgeDock->setObjectName("edgeDock");
+    edgeDock->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Expanding);
+    QVBoxLayout *edgeLayout = new QVBoxLayout(edgeDock);
+    edgeLayout->setContentsMargins(0, 0, 0, 0);
+    edgeLayout->setSpacing(10);
+
+    QWidget *rightControls = new QWidget(edgeDock);
+    rightControls->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Preferred);
+    QHBoxLayout *controlsLayout = new QHBoxLayout(rightControls);
+    controlsLayout->setContentsMargins(0, 0, 0, 0);
+    controlsLayout->setSpacing(6);
+
+    QVBoxLayout *orderToggleColumn = new QVBoxLayout();
+    orderToggleColumn->setContentsMargins(0, 0, 0, 0);
+    orderToggleColumn->setSpacing(6);
+    orderToggleColumn->addWidget(m_orderToggleButton, 0, Qt::AlignTop);
+    orderToggleColumn->addStretch(1);
+
+    QVBoxLayout *watchToggleColumn = new QVBoxLayout();
+    watchToggleColumn->setContentsMargins(0, 0, 0, 0);
+    watchToggleColumn->setSpacing(6);
+    watchToggleColumn->addWidget(m_watchlistToggle, 0, Qt::AlignTop);
+    watchToggleColumn->addStretch(1);
+
+    controlsLayout->addLayout(orderToggleColumn);
+    controlsLayout->addLayout(watchToggleColumn);
+
+    edgeLayout->addWidget(rightControls, 0, Qt::AlignRight);
+    edgeLayout->addStretch(1);
+    edgeLayout->addWidget(m_portfolioToggleButton, 0, Qt::AlignRight | Qt::AlignBottom);
+
+    QHBoxLayout *contentRow = new QHBoxLayout();
+    contentRow->setContentsMargins(0, 0, 0, 0);
+    contentRow->setSpacing(10);
+    contentRow->addWidget(verticalSplit, 1);
+    contentRow->addWidget(edgeDock, 0);
 
     mainLayout->addWidget(toolbar);
-    mainLayout->addWidget(verticalSplit, 1);
+    mainLayout->addLayout(contentRow, 1);
 
-    onWatchlistToggled(m_watchlistToggle->isChecked());
-    onOrderPanelToggled(m_orderToggleButton->isChecked());
-    onPortfolioToggled(m_portfolioToggleButton->isChecked());
+    toggleOrderPanel(true, false);
+    toggleWatchlistPanel(true, false);
+    togglePortfolioPanel(true, false);
 
     setCentralWidget(central);
     setWindowTitle("PaperTrader - Market Feed Viewer");
@@ -141,7 +281,15 @@ void MainWindow::setupUi()
         "QPushButton:hover { background-color: #3a65ff; }"
         "QLabel#sectionTitle { font-weight: 600; font-size: 14px; color: #a7b5d8; }"
         "QToolButton#watchlistToggle, QToolButton#orderToggle, QToolButton#portfolioToggle {"
-        " background-color: transparent; border: none; color: #a7b5d8; }"
+        " background-color: #13182a; border: 1px solid #2c3249; border-radius: 12px;"
+        " min-width: 34px; min-height: 60px; color: #a7b5d8; }"
+        "QToolButton#portfolioToggle { min-height: 34px; }"
+        "QToolButton#watchlistToggle[checked=\"false\"],"
+        "QToolButton#orderToggle[checked=\"false\"],"
+        "QToolButton#portfolioToggle[checked=\"false\"] {"
+        " background-color: #0e1220; color: #5c6688; }"
+        "QToolButton#watchlistToggle:hover, QToolButton#orderToggle:hover, QToolButton#portfolioToggle:hover {"
+        " background-color: #1f2640; }"
         "QListWidget { background-color: #111522; border: 1px solid #2c3249;"
         " border-radius: 6px; }"
         "QTableWidget { background-color: #111522; border: 1px solid #2c3249;"
@@ -163,14 +311,6 @@ void MainWindow::buildWatchlistPanel(QFrame *panel)
     title->setObjectName("sectionTitle");
     header->addWidget(title);
     header->addStretch(1);
-    // Edge toggle keeps the drawer accessible while collapsed.
-    m_watchlistToggle = new QToolButton(panel);
-    m_watchlistToggle->setObjectName("watchlistToggle");
-    m_watchlistToggle->setCheckable(true);
-    m_watchlistToggle->setChecked(true);
-    m_watchlistToggle->setArrowType(Qt::RightArrow);
-    m_watchlistToggle->setToolTip(tr("Collapse watchlist"));
-    header->addWidget(m_watchlistToggle, 0, Qt::AlignRight);
     layout->addLayout(header);
 
     m_watchlistContainer = new QWidget(panel);
@@ -214,14 +354,6 @@ void MainWindow::buildOrderPanel(QFrame *panel)
     title->setObjectName("sectionTitle");
     header->addWidget(title);
     header->addStretch(1);
-    // Collapsible order ticket mirrors the TradingView drawer interaction.
-    m_orderToggleButton = new QToolButton(panel);
-    m_orderToggleButton->setObjectName("orderToggle");
-    m_orderToggleButton->setCheckable(true);
-    m_orderToggleButton->setChecked(true);
-    m_orderToggleButton->setArrowType(Qt::RightArrow);
-    m_orderToggleButton->setToolTip(tr("Collapse order ticket"));
-    header->addWidget(m_orderToggleButton, 0, Qt::AlignRight);
     layout->addLayout(header);
 
     m_orderContainer = new QWidget(panel);
@@ -343,14 +475,6 @@ void MainWindow::buildPortfolioPanel(QFrame *panel)
     QHBoxLayout *footer = new QHBoxLayout();
     footer->setContentsMargins(0, 0, 0, 0);
     footer->addStretch(1);
-    // Bottom-right toggle emulates TradingView's collapsible account bar.
-    m_portfolioToggleButton = new QToolButton(panel);
-    m_portfolioToggleButton->setObjectName("portfolioToggle");
-    m_portfolioToggleButton->setCheckable(true);
-    m_portfolioToggleButton->setChecked(true);
-    m_portfolioToggleButton->setArrowType(Qt::DownArrow);
-    m_portfolioToggleButton->setToolTip(tr("Collapse portfolio panel"));
-    footer->addWidget(m_portfolioToggleButton);
     layout->addLayout(footer);
 }
 
@@ -468,26 +592,17 @@ void MainWindow::onCandleReceived(const Candle &c)
 
 void MainWindow::onWatchlistToggled(bool expanded)
 {
-    m_watchlistToggle->setArrowType(expanded ? Qt::RightArrow : Qt::LeftArrow);
-    m_watchlistToggle->setToolTip(expanded ? tr("Collapse watchlist")
-                                         : tr("Expand watchlist"));
-    m_watchlistContainer->setVisible(expanded);
+    toggleWatchlistPanel(expanded, true);
 }
 
 void MainWindow::onOrderPanelToggled(bool expanded)
 {
-    m_orderToggleButton->setArrowType(expanded ? Qt::RightArrow : Qt::LeftArrow);
-    m_orderToggleButton->setToolTip(expanded ? tr("Collapse order ticket")
-                                             : tr("Expand order ticket"));
-    m_orderContainer->setVisible(expanded);
+    toggleOrderPanel(expanded, true);
 }
 
 void MainWindow::onPortfolioToggled(bool expanded)
 {
-    m_portfolioToggleButton->setArrowType(expanded ? Qt::DownArrow : Qt::UpArrow);
-    m_portfolioToggleButton->setToolTip(expanded ? tr("Collapse portfolio panel")
-                                                 : tr("Expand portfolio panel"));
-    m_portfolioContent->setVisible(expanded);
+    togglePortfolioPanel(expanded, true);
 }
 
 void MainWindow::onAddWatchlistSymbol()
@@ -547,6 +662,179 @@ OrderManager::OrderType MainWindow::currentOrderType() const
     return (m_orderTypeCombo->currentIndex() == 1)
             ? OrderManager::OrderType::Limit
             : OrderManager::OrderType::Market;
+}
+
+void MainWindow::toggleWatchlistPanel(bool expanded, bool animate)
+{
+    if (m_watchlistToggle) {
+        if (m_watchlistToggle->isChecked() != expanded) {
+            const QSignalBlocker blocker(m_watchlistToggle);
+            m_watchlistToggle->setChecked(expanded);
+        }
+        m_watchlistToggle->setArrowType(expanded ? Qt::RightArrow : Qt::LeftArrow);
+        m_watchlistToggle->setToolTip(expanded ? tr("Collapse watchlist")
+                                               : tr("Expand watchlist"));
+    }
+
+    if (!m_horizontalSplit || !m_watchlistPanelWidget || !m_chartPanelWidget)
+        return;
+
+    QList<int> currentSizes = m_horizontalSplit->sizes();
+    const int watchIndex = m_horizontalSplit->indexOf(m_watchlistPanelWidget);
+    const int chartIndex = m_horizontalSplit->indexOf(m_chartPanelWidget);
+
+    if (watchIndex < 0 || chartIndex < 0)
+        return;
+
+    if (!expanded) {
+        const int currentWidth = currentSizes.value(watchIndex);
+        if (currentWidth > 0)
+            m_savedWatchlistWidth = currentWidth;
+    } else if (m_savedWatchlistWidth <= 0) {
+        m_savedWatchlistWidth = std::max(m_watchlistPanelWidget->sizeHint().width(), 220);
+    }
+
+    const int desiredWidth = expanded ? m_savedWatchlistWidth : 0;
+    QList<int> targetSizes = currentSizes;
+    const int delta = currentSizes.value(watchIndex) - desiredWidth;
+    targetSizes[watchIndex] = desiredWidth;
+    targetSizes[chartIndex] = std::max(1, currentSizes.value(chartIndex) + delta);
+
+    auto finish = [this, expanded]() {
+        if (m_watchlistPanelWidget)
+            m_watchlistPanelWidget->setVisible(expanded);
+        if (m_watchlistContainer)
+            m_watchlistContainer->setVisible(expanded);
+    };
+
+    if (expanded) {
+        if (m_watchlistPanelWidget)
+            m_watchlistPanelWidget->setVisible(true);
+        if (m_watchlistContainer)
+            m_watchlistContainer->setVisible(true);
+    }
+
+    if (!animate) {
+        m_horizontalSplit->setSizes(targetSizes);
+        finish();
+    } else {
+        animateSplitterSizes(m_horizontalSplit, currentSizes, targetSizes, finish);
+    }
+}
+
+void MainWindow::toggleOrderPanel(bool expanded, bool animate)
+{
+    if (m_orderToggleButton) {
+        if (m_orderToggleButton->isChecked() != expanded) {
+            const QSignalBlocker blocker(m_orderToggleButton);
+            m_orderToggleButton->setChecked(expanded);
+        }
+        m_orderToggleButton->setArrowType(expanded ? Qt::RightArrow : Qt::LeftArrow);
+        m_orderToggleButton->setToolTip(expanded ? tr("Collapse order ticket")
+                                                 : tr("Expand order ticket"));
+    }
+
+    if (!m_horizontalSplit || !m_orderPanelWidget || !m_chartPanelWidget)
+        return;
+
+    QList<int> currentSizes = m_horizontalSplit->sizes();
+    const int orderIndex = m_horizontalSplit->indexOf(m_orderPanelWidget);
+    const int chartIndex = m_horizontalSplit->indexOf(m_chartPanelWidget);
+
+    if (orderIndex < 0 || chartIndex < 0)
+        return;
+
+    if (!expanded) {
+        const int currentWidth = currentSizes.value(orderIndex);
+        if (currentWidth > 0)
+            m_savedOrderWidth = currentWidth;
+    } else if (m_savedOrderWidth <= 0) {
+        m_savedOrderWidth = std::max(m_orderPanelWidget->sizeHint().width(), 220);
+    }
+
+    const int desiredWidth = expanded ? m_savedOrderWidth : 0;
+    QList<int> targetSizes = currentSizes;
+    const int delta = currentSizes.value(orderIndex) - desiredWidth;
+    targetSizes[orderIndex] = desiredWidth;
+    targetSizes[chartIndex] = std::max(1, currentSizes.value(chartIndex) + delta);
+
+    auto finish = [this, expanded]() {
+        if (m_orderPanelWidget)
+            m_orderPanelWidget->setVisible(expanded);
+        if (m_orderContainer)
+            m_orderContainer->setVisible(expanded);
+    };
+
+    if (expanded) {
+        if (m_orderPanelWidget)
+            m_orderPanelWidget->setVisible(true);
+        if (m_orderContainer)
+            m_orderContainer->setVisible(true);
+    }
+
+    if (!animate) {
+        m_horizontalSplit->setSizes(targetSizes);
+        finish();
+    } else {
+        animateSplitterSizes(m_horizontalSplit, currentSizes, targetSizes, finish);
+    }
+}
+
+void MainWindow::togglePortfolioPanel(bool expanded, bool animate)
+{
+    if (m_portfolioToggleButton) {
+        if (m_portfolioToggleButton->isChecked() != expanded) {
+            const QSignalBlocker blocker(m_portfolioToggleButton);
+            m_portfolioToggleButton->setChecked(expanded);
+        }
+        m_portfolioToggleButton->setArrowType(expanded ? Qt::DownArrow : Qt::UpArrow);
+        m_portfolioToggleButton->setToolTip(expanded ? tr("Collapse portfolio panel")
+                                                     : tr("Expand portfolio panel"));
+    }
+
+    if (m_portfolioContent)
+        m_portfolioContent->setVisible(expanded);
+
+    if (!m_verticalSplit || !m_portfolioPanelWidget || !m_topAreaWidget)
+        return;
+
+    QList<int> currentSizes = m_verticalSplit->sizes();
+    const int portfolioIndex = m_verticalSplit->indexOf(m_portfolioPanelWidget);
+    const int topIndex = m_verticalSplit->indexOf(m_topAreaWidget);
+
+    if (portfolioIndex < 0 || topIndex < 0)
+        return;
+
+    if (!expanded) {
+        const int currentHeight = currentSizes.value(portfolioIndex);
+        if (currentHeight > 0)
+            m_savedPortfolioHeight = currentHeight;
+    } else if (m_savedPortfolioHeight <= 0) {
+        m_savedPortfolioHeight = std::max(m_portfolioPanelWidget->sizeHint().height(), 200);
+    }
+
+    const int desiredHeight = expanded ? m_savedPortfolioHeight : 0;
+    QList<int> targetSizes = currentSizes;
+    const int delta = currentSizes.value(portfolioIndex) - desiredHeight;
+    targetSizes[portfolioIndex] = desiredHeight;
+    targetSizes[topIndex] = std::max(1, currentSizes.value(topIndex) + delta);
+
+    auto finish = [this, expanded]() {
+        if (m_portfolioPanelWidget)
+            m_portfolioPanelWidget->setVisible(expanded);
+        if (m_portfolioContent)
+            m_portfolioContent->setVisible(expanded);
+    };
+
+    if (expanded && m_portfolioPanelWidget)
+        m_portfolioPanelWidget->setVisible(true);
+
+    if (!animate) {
+        m_verticalSplit->setSizes(targetSizes);
+        finish();
+    } else {
+        animateSplitterSizes(m_verticalSplit, currentSizes, targetSizes, finish);
+    }
 }
 
 void MainWindow::onPlaceOrder()

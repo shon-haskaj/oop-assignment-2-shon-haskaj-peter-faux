@@ -18,6 +18,10 @@ public:
         double acceptedQuantity = 0.0;
         double effectivePrice = 0.0;
         double fee = 0.0;
+        double closingQuantity = 0.0;
+        double openingQuantity = 0.0;
+        double estimatedOrderMargin = 0.0;
+        double estimatedFees = 0.0;
         QString errorCode;
     };
 
@@ -44,6 +48,7 @@ signals:
 
 private:
     void updateUnrealizedFor(const QString &symbol);
+    void updateUnrealized(Position &position);
     double marginForPosition(const Position &position) const;
     double marginForOrder(const Order &order) const;
     double marginForOrder(const QString &symbol,
@@ -54,6 +59,11 @@ private:
                                    const QString &side,
                                    double quantity) const;
     double availableFundsInternal() const;
+    double availableFundsInternalWithoutClamp() const;
+    double perUnitFee(double price) const;
+    double remainingOrderQuantity(const Order &order) const;
+    double longMarginRate() const { return m_longMarginRate; }
+    double shortMarginRate() const { return m_shortMarginRate; }
     void recomputeOrderMargin();
     void recordOrUpdatePosition(const QString &symbol, const Position &position);
     void emitSnapshot();
@@ -64,6 +74,7 @@ private:
     QList<Order> m_openOrders;
     double m_realizedPnL = 0.0;
     double m_orderMargin = 0.0;
+    double m_longMarginRate = 0.0;
     double m_shortMarginRate = 0.5;
     double m_feeRate = 0.0004;
 };

@@ -4,11 +4,13 @@
 #include <QPushButton>
 #include <QLineEdit>
 #include <QLabel>
-#include "core/papertraderapp.h"
 #include "chartwidget.h"
+#include "core/ordermanager.h"
 #include "core/models/order.h"
 #include "core/models/position.h"
 #include "core/models/portfoliosnapshot.h"
+#include "controllers/chartcontroller.h"
+#include "controllers/tradingcontroller.h"
 
 class QListWidget;
 class QListWidgetItem;
@@ -22,14 +24,15 @@ class QSplitter;
 class MainWindow : public QMainWindow {
     Q_OBJECT
 public:
-    explicit MainWindow(QWidget *parent = nullptr);
+    explicit MainWindow(ChartController *chartController,
+                       TradingController *tradingController,
+                       QWidget *parent = nullptr);
     ~MainWindow();
 
 private slots:
     void onStartFeed();
     void onStopFeed();
     void onFeedModeChanged(int index);
-    void onCandleReceived(const Candle &c);
     void onWatchlistToggled(bool expanded);
     void onAddWatchlistSymbol();
     void onWatchlistSymbolActivated(QListWidgetItem *item);
@@ -47,8 +50,7 @@ private slots:
     void onThemeToggled(bool checked);
 
 private:
-    PaperTraderApp *m_app;
-    ChartWidget    *m_chart;
+    ChartWidget *m_chart;
 
     // Toolbar widgets
     QComboBox  *m_feedSelector;
@@ -92,9 +94,8 @@ private:
     QDoubleValidator *m_qtyValidator;
     QDoubleValidator *m_priceValidator;
 
-    OrderManager     *m_orderManager = nullptr;
-    PortfolioManager *m_portfolioManager = nullptr;
-    StorageManager   *m_storage = nullptr;
+    ChartController   *m_chartController = nullptr;
+    TradingController *m_tradingController = nullptr;
 
     QSplitter *m_horizontalSplit = nullptr;
     QSplitter *m_verticalSplit = nullptr;
@@ -112,8 +113,6 @@ private:
     int m_savedWatchlistWidth = 260;
     int m_savedOrderWidth = 260;
     int m_savedPortfolioHeight = 240;
-
-    MarketDataProvider::FeedMode m_currentMode = MarketDataProvider::FeedMode::Synthetic;
 
     enum class Theme { Dark, Light };
     Theme m_theme = Theme::Dark;

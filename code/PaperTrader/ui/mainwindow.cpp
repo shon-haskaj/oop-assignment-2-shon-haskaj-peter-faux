@@ -77,15 +77,14 @@ void animateSplitterSizes(QSplitter *splitter,
 }
 }
 
-MainWindow::MainWindow(QWidget *parent)
+MainWindow::MainWindow(ChartController *chartController,
+                       TradingController *tradingController,
+                       QWidget *parent)
     : QMainWindow(parent),
-      m_app(new PaperTraderApp(this)),
-      m_chart(new ChartWidget(this))
+      m_chart(new ChartWidget(this)),
+      m_chartController(chartController),
+      m_tradingController(tradingController)
 {
-    m_orderManager = m_app->orderManager();
-    m_portfolioManager = m_app->portfolioManager();
-    m_storage = m_app->storageManager();
-
     setupUi();
     setupConnections();
     loadStateFromStorage();
@@ -491,38 +490,61 @@ void MainWindow::setupConnections()
     connect(m_themeToggle, &QToolButton::toggled,
             this, &MainWindow::onThemeToggled);
 
-    if (auto provider = m_app->dataProvider()) {
-        connect(provider, &MarketDataProvider::newCandle,
+    if (m_chartController) {
+        connect(m_chartController, &ChartController::candleReceived,
                 m_chart, &ChartWidget::appendCandle);
-        connect(provider, &MarketDataProvider::newCandle,
-                this, &MainWindow::onCandleReceived);
-        connect(provider, &MarketDataProvider::connectionStateChanged,
+        connect(m_chartController, &ChartController::lastPriceChanged,
+                this, [this](const QString &symbol, double price) {
+                    m_lastSymbol = symbol;
+                    m_lastPrice = price;
+                });
+        connect(m_chartController, &ChartController::connectionStateChanged,
                 this, [this](bool connected) {
                     m_statusLabel->setText(connected ? "🟢 Connected" : "🔴 Disconnected");
                 });
+        connect(m_chartController, &ChartController::feedStarted,
+                this, [this](const QString &symbol, MarketDataProvider::FeedMode) {
+                    m_chart->clearCandles();
+                    m_lastSymbol = symbol;
+                    m_lastPrice = 0.0;
+                    setWindowTitle(QString("PaperTrader - %1 (%2)")
+                                       .arg(symbol)
+                                       .arg(m_feedSelector->currentText()));
+                    m_statusLabel->setText(tr("🟡 Connecting"));
+                });
+        connect(m_chartController, &ChartController::feedStopped,
+                this, [this]() {
+                    m_chart->clearCandles();
+                    m_lastSymbol.clear();
+                    m_lastPrice = 0.0;
+                    m_statusLabel->setText("🔴 Disconnected");
+                    setWindowTitle("PaperTrader - Market Feed Viewer");
+                });
     }
 
-    if (m_orderManager) {
-        connect(m_orderManager, &OrderManager::ordersChanged,
+    if (m_tradingController) {
+        connect(m_tradingController, &TradingController::ordersChanged,
                 this, &MainWindow::refreshOrders);
-        connect(m_orderManager, &OrderManager::orderRejected,
+        connect(m_tradingController, &TradingController::orderRejected,
                 this, &MainWindow::onOrderRejected);
-        refreshOrders(m_orderManager->orders());
-    }
-
-    if (m_portfolioManager) {
-        connect(m_portfolioManager, &PortfolioManager::portfolioChanged,
+        connect(m_tradingController, &TradingController::portfolioChanged,
                 this, &MainWindow::refreshPortfolio);
-        refreshPortfolio(m_portfolioManager->snapshot(),
-                         m_portfolioManager->positions());
+
+        refreshOrders(m_tradingController->orders());
+        refreshPortfolio(m_tradingController->snapshot(),
+                         m_tradingController->positions());
     }
 }
 
 void MainWindow::onFeedModeChanged(int index)
 {
-    m_currentMode = (index == 1)
+    if (!m_chartController)
+        return;
+
+    const auto mode = (index == 1)
             ? MarketDataProvider::FeedMode::Binance
             : MarketDataProvider::FeedMode::Synthetic;
+    m_chartController->setFeedMode(mode);
     persistSettings();
 }
 
@@ -534,36 +556,21 @@ void MainWindow::onStartFeed()
         m_symbolEdit->setText(symbol);
     }
 
-    if (!m_app)
-        return;
+    if (m_chartController) {
+        if (!m_chartController->startFeed(symbol)) {
+            m_statusLabel->setText(tr("⚠️ Enter a symbol"));
+            return;
+        }
+        m_lastSymbol = symbol.toUpper();
+    }
 
-    m_app->stopFeed();
-    m_app->startFeed(m_currentMode, symbol);
-
-    m_lastSymbol = symbol.toUpper();
-    setWindowTitle(QString("PaperTrader - %1 (%2)")
-                       .arg(m_lastSymbol)
-                       .arg(m_feedSelector->currentText()));
     persistSettings();
 }
 
 void MainWindow::onStopFeed()
 {
-    if (m_app)
-        m_app->stopFeed();
-
-    m_chart->clearCandles();
-    m_statusLabel->setText("🔴 Disconnected");
-    setWindowTitle("PaperTrader - Market Feed Viewer");
-}
-
-void MainWindow::onCandleReceived(const Candle &c)
-{
-    m_lastPrice = c.close;
-    m_lastSymbol = c.symbol.toUpper();
-    if (m_orderManager) {
-        m_orderManager->setLastPrice(m_lastSymbol, m_lastPrice);
-    }
+    if (m_chartController)
+        m_chartController->stopFeed();
 }
 
 void MainWindow::onWatchlistToggled(bool expanded)
@@ -953,7 +960,7 @@ void MainWindow::togglePortfolioPanel(bool expanded, bool animate)
 
 void MainWindow::onPlaceOrder()
 {
-    if (!m_orderManager)
+    if (!m_tradingController)
         return;
 
     const QString symbol = m_symbolEdit->text().trimmed().toUpper();
@@ -973,14 +980,15 @@ void MainWindow::onPlaceOrder()
     }
 
     if (type == OrderManager::OrderType::Market && price <= 0.0) {
-        if (m_lastPrice <= 0.0) {
+        const double referencePrice = m_chartController ? m_chartController->lastPrice() : m_lastPrice;
+        if (referencePrice <= 0.0) {
             m_statusLabel->setText("⚠️ Awaiting price data");
             return;
         }
-        price = m_lastPrice;
+        price = referencePrice;
     }
 
-    const OrderManager::OrderPlacementResult result = m_orderManager->placeOrder(type, symbol, side, quantity, price);
+    const OrderManager::OrderPlacementResult result = m_tradingController->placeOrder(type, symbol, side, quantity, price);
 
     if (!result.accepted) {
         m_statusLabel->setText(QStringLiteral("❌ %1").arg(errorCodeToMessage(result.errorCode)));
@@ -1025,7 +1033,7 @@ void MainWindow::onPlaceOrder()
 
 void MainWindow::onCancelSelectedOrder()
 {
-    if (!m_orderManager)
+    if (!m_tradingController)
         return;
     auto *selection = m_ordersTable->selectionModel();
     if (!selection)
@@ -1041,7 +1049,7 @@ void MainWindow::onCancelSelectedOrder()
     int id = idItem->data(Qt::UserRole).toInt(&ok);
     if (!ok)
         id = idItem->text().toInt(&ok);
-    if (ok && m_orderManager->cancelOrder(id)) {
+    if (ok && m_tradingController->cancelOrder(id)) {
         m_statusLabel->setText("✅ Order cancelled");
     }
 }
@@ -1167,13 +1175,13 @@ void MainWindow::loadStateFromStorage()
     QString symbolPreference;
     int feedIndex = m_feedSelector->currentIndex();
 
-    if (m_storage) {
-        m_watchlist = m_storage->loadWatchlist();
+    if (m_chartController) {
+        m_watchlist = m_chartController->loadWatchlist();
         if (m_watchlist.isEmpty()) {
             m_watchlist = {"BTCUSDT", "ETHUSDT", "EURUSD"};
         }
 
-        const QJsonObject settings = m_storage->loadSettings();
+        const QJsonObject settings = m_chartController->loadSettings();
         symbolPreference = settings.value("lastSymbol").toString();
         feedIndex = settings.value("feedMode").toInt(feedIndex);
     } else {
@@ -1217,16 +1225,16 @@ void MainWindow::populateWatchlist(const QString &selectSymbol)
 
 void MainWindow::persistWatchlist()
 {
-    if (m_storage)
-        m_storage->saveWatchlist(m_watchlist);
+    if (m_chartController)
+        m_chartController->saveWatchlist(m_watchlist);
 }
 
 void MainWindow::persistSettings()
 {
-    if (!m_storage)
+    if (!m_chartController)
         return;
     QJsonObject settings;
     settings.insert("lastSymbol", m_symbolEdit->text().trimmed());
     settings.insert("feedMode", m_feedSelector->currentIndex());
-    m_storage->saveSettings(settings);
+    m_chartController->saveSettings(settings);
 }

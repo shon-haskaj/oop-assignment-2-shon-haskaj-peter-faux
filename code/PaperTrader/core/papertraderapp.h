@@ -21,6 +21,7 @@ public:
     void stopFeed();
 
     MarketDataProvider *dataProvider() const { return m_dataProvider; }
+    ChartManager       *chartManager() const { return m_chartManager; }
     OrderManager       *orderManager() const { return m_orderManager; }
     PortfolioManager   *portfolioManager() const { return m_portfolioManager; }
     StorageManager     *storageManager() const { return m_storageManager; }

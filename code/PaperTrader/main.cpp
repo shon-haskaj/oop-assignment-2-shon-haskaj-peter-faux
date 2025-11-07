@@ -8,7 +8,7 @@
 int main(int argc, char *argv[]) {
     QApplication app(argc, argv);
     PaperTraderApp coreApp;
-    ChartController chartController(&coreApp);
+    ChartController chartController(coreApp.chartManager());
     TradingController tradingController(&coreApp);
     QObject::connect(&chartController, &ChartController::lastPriceChanged,
                      &tradingController, &TradingController::onLastPriceChanged);

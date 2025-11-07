@@ -12,6 +12,9 @@ PaperTraderApp::PaperTraderApp(QObject *parent)
     m_portfolioManager = new PortfolioManager(this);
     m_storageManager = new StorageManager(this);
 
+    m_chartManager->setMarketDataProvider(m_dataProvider);
+    m_chartManager->setStorageManager(m_storageManager);
+
     m_orderManager->setPortfolioManager(m_portfolioManager);
 
     QObject::connect(m_dataProvider, &MarketDataProvider::connectionStateChanged,

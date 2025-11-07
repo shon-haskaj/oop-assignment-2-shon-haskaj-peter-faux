@@ -1,101 +1,74 @@
 #include "chartcontroller.h"
-#include "core/storagemanager.h"
 
-ChartController::ChartController(PaperTraderApp *app, QObject *parent)
+ChartController::ChartController(ChartManager *chartManager, QObject *parent)
     : QObject(parent),
-      m_app(app)
+      m_chartManager(chartManager)
 {
-    if (m_app) {
-        attachProvider(m_app->dataProvider());
-        m_storage = m_app->storageManager();
-    }
+    if (!m_chartManager)
+        return;
+
+    m_mode = m_chartManager->feedMode();
+
+    connect(m_chartManager, &ChartManager::candleReceived,
+            this, &ChartController::candleReceived);
+    connect(m_chartManager, &ChartManager::connectionStateChanged,
+            this, &ChartController::connectionStateChanged);
+    connect(m_chartManager, &ChartManager::feedStarted,
+            this, &ChartController::feedStarted);
+    connect(m_chartManager, &ChartManager::feedStopped,
+            this, &ChartController::feedStopped);
+    connect(m_chartManager, &ChartManager::lastPriceChanged,
+            this, &ChartController::lastPriceChanged);
 }
 
 void ChartController::setFeedMode(MarketDataProvider::FeedMode mode)
 {
     m_mode = mode;
+    if (m_chartManager)
+        m_chartManager->setFeedMode(mode);
 }
 
 bool ChartController::startFeed(const QString &symbol)
 {
-    if (!m_app)
+    if (!m_chartManager)
         return false;
-
-    const QString trimmed = symbol.trimmed();
-    if (trimmed.isEmpty())
-        return false;
-
-    m_app->stopFeed();
-    m_app->startFeed(m_mode, trimmed);
-    attachProvider(m_app->dataProvider());
-
-    m_lastSymbol = trimmed.toUpper();
-    m_lastPrice = 0.0;
-    emit feedStarted(m_lastSymbol, m_mode);
-    emit lastPriceChanged(m_lastSymbol, m_lastPrice);
-    return true;
+    return m_chartManager->startFeed(symbol);
 }
 
 void ChartController::stopFeed()
 {
-    if (!m_app)
-        return;
-
-    m_app->stopFeed();
-    m_lastPrice = 0.0;
-    emit feedStopped();
+    if (m_chartManager)
+        m_chartManager->stopFeed();
 }
 
 QStringList ChartController::loadWatchlist() const
 {
-    return m_storage ? m_storage->loadWatchlist() : QStringList{};
+    return m_chartManager ? m_chartManager->loadWatchlist() : QStringList{};
 }
 
 void ChartController::saveWatchlist(const QStringList &symbols) const
 {
-    if (m_storage)
-        m_storage->saveWatchlist(symbols);
+    if (m_chartManager)
+        m_chartManager->saveWatchlist(symbols);
 }
 
 QJsonObject ChartController::loadSettings() const
 {
-    return m_storage ? m_storage->loadSettings() : QJsonObject{};
+    return m_chartManager ? m_chartManager->loadSettings() : QJsonObject{};
 }
 
 void ChartController::saveSettings(const QJsonObject &settings) const
 {
-    if (m_storage)
-        m_storage->saveSettings(settings);
+    if (m_chartManager)
+        m_chartManager->saveSettings(settings);
 }
 
-void ChartController::attachProvider(MarketDataProvider *provider)
+double ChartController::lastPrice() const
 {
-    if (provider == m_provider)
-        return;
-
-    if (m_provider) {
-        disconnect(m_provider, nullptr, this, nullptr);
-    }
-
-    m_provider = provider;
-    if (!m_provider)
-        return;
-
-    connect(m_provider, &MarketDataProvider::newCandle,
-            this, &ChartController::handleCandle);
-    connect(m_provider, &MarketDataProvider::connectionStateChanged,
-            this, &ChartController::handleConnectionChange);
+    return m_chartManager ? m_chartManager->lastPrice() : 0.0;
 }
 
-void ChartController::handleCandle(const Candle &c)
+QString ChartController::lastSymbol() const
 {
-    m_lastPrice = c.close;
-    m_lastSymbol = c.symbol.toUpper();
-    emit candleReceived(c);
-    emit lastPriceChanged(m_lastSymbol, m_lastPrice);
-}
-
-void ChartController::handleConnectionChange(bool connected)
-{
-    emit connectionStateChanged(connected);
+    return m_chartManager ? m_chartManager->lastSymbol() : QString{};
 }

@@ -12,8 +12,8 @@ double PortfolioManager::totalUnrealizedPnL() const
     double total = 0.0;
     for (const Position &pos : m_positions) {
         const double last = pos.lastPrice > 0.0
-                ? pos.lastPrice
-                : m_lastPrices.value(pos.symbol, pos.avgPx);
+                                ? pos.lastPrice
+                                : m_lastPrices.value(pos.symbol, pos.avgPx);
         if (pos.qty > 0.0) {
             total += pos.qty * (last - pos.avgPx);
         } else if (pos.qty < 0.0) {
@@ -50,11 +50,11 @@ double PortfolioManager::estimateFee(double price, double quantity) const
 }
 
 PortfolioManager::OrderValidationResult PortfolioManager::validateOrder(
-        bool isMarket,
-        const QString &symbol,
-        const QString &side,
-        double quantity,
-        double price) const
+    bool isMarket,
+    const QString &symbol,
+    const QString &side,
+    double quantity,
+    double price) const
 {
     OrderValidationResult result;
     const QString normalisedSymbol = symbol.trimmed().toUpper();
@@ -124,8 +124,8 @@ PortfolioManager::OrderValidationResult PortfolioManager::validateOrder(
         if (isBuy) {
             const double absPos = std::abs(positionQty);
             const double collateralPerUnit = absPos > 0.0
-                    ? pos.shortCollateral / absPos
-                    : 0.0;
+                                                 ? pos.shortCollateral / absPos
+                                                 : 0.0;
             const double release = collateralPerUnit * closingQty;
             const double cost = closingQty * effectivePrice + closingFee;
             available += release - cost;
@@ -161,8 +161,8 @@ PortfolioManager::OrderValidationResult PortfolioManager::validateOrder(
                 acceptedOpening = openingQty;
             } else {
                 const double maxQty = perUnitMargin > 0.0
-                        ? available / perUnitMargin
-                        : 0.0;
+                                          ? available / perUnitMargin
+                                          : 0.0;
                 if (maxQty > 0.0) {
                     acceptedOpening = std::min(openingQty, maxQty);
                     openingError = QStringLiteral("ERR_PARTIAL_FILL");
@@ -178,8 +178,8 @@ PortfolioManager::OrderValidationResult PortfolioManager::validateOrder(
 
     if (result.acceptedQuantity <= 0.0) {
         result.errorCode = openingError.isEmpty()
-                ? QStringLiteral("ERR_INSUFFICIENT_FUNDS")
-                : openingError;
+        ? QStringLiteral("ERR_INSUFFICIENT_FUNDS")
+        : openingError;
         return result;
     }
 
@@ -210,16 +210,17 @@ void PortfolioManager::applyFill(const Order &order)
 
     const bool isBuy = order.side.compare("BUY", Qt::CaseInsensitive) == 0;
     double price = order.filledPrice > 0.0
-            ? order.filledPrice
-            : m_lastPrices.value(symbol, order.price);
+                       ? order.filledPrice
+                       : m_lastPrices.value(symbol, order.price);
     if (price <= 0.0)
         price = order.price;
     if (price <= 0.0)
         price = m_lastPrices.value(symbol, 0.0);
 
+    // Total fee actually charged for this fill (may be provided by venue).
     double totalFee = order.fee > 0.0
-            ? order.fee
-            : estimateFee(price, order.filledQuantity);
+                          ? order.fee
+                          : estimateFee(price, order.filledQuantity);
 
     auto weightedAverage = [](double existingQty, double existingAvg, double addQty, double addPrice) {
         const double absExisting = std::abs(existingQty);
@@ -237,26 +238,25 @@ void PortfolioManager::applyFill(const Order &order)
                 const double coverQty = std::min(remainingQty, -pos.qty);
                 const double absPos = std::abs(pos.qty);
                 const double collateralPerUnit = absPos > 0.0
-                        ? pos.shortCollateral / absPos
-                        : 0.0;
+                                                     ? pos.shortCollateral / absPos
+                                                     : 0.0;
                 const double collateralRelease = collateralPerUnit * coverQty;
                 const double realized = (pos.avgPx - price) * coverQty;
-                const double feeShare = order.filledQuantity > 0.0
-                        ? totalFee * (coverQty / order.filledQuantity)
-                        : 0.0;
-                // Short selling does not credit cash up front, so we release the
-                // stored collateral before paying to cover the borrowed shares.
+
+                // Release collateral then pay to cover the borrowed shares.
                 m_cash += collateralRelease;
                 m_cash -= price * coverQty;
+
                 pos.shortCollateral -= collateralRelease;
-                pos.realizedPnL += realized - feeShare;
-                m_realizedPnL += realized - feeShare;
+                pos.realizedPnL += realized;
+                m_realizedPnL += realized;
+
                 pos.qty += coverQty;
                 remainingQty -= coverQty;
                 if (qFuzzyIsNull(pos.qty))
                     pos.avgPx = 0.0;
             } else {
-                // Going long consumes cash immediately (no leverage in spot).
+                // Opening / adding to a long position consumes cash.
                 m_cash -= price * remainingQty;
                 pos.avgPx = weightedAverage(pos.qty, pos.avgPx, remainingQty, price);
                 pos.qty += remainingQty;
@@ -268,20 +268,19 @@ void PortfolioManager::applyFill(const Order &order)
             if (pos.qty > 0.0) {
                 const double sellQty = std::min(remainingQty, pos.qty);
                 const double realized = (price - pos.avgPx) * sellQty;
-                const double feeShare = order.filledQuantity > 0.0
-                        ? totalFee * (sellQty / order.filledQuantity)
-                        : 0.0;
-                pos.realizedPnL += realized - feeShare;
-                m_realizedPnL += realized - feeShare;
-                // Closing a long position immediately injects the proceeds into cash.
+
+                // Closing a long: proceeds go straight to cash.
                 m_cash += price * sellQty;
+
+                pos.realizedPnL += realized;
+                m_realizedPnL += realized;
+
                 pos.qty -= sellQty;
                 remainingQty -= sellQty;
                 if (qFuzzyIsNull(pos.qty))
                     pos.avgPx = 0.0;
             } else {
-                // The proceeds of a new short are held as collateral instead of
-                // crediting cash so that account balance reflects locked funds.
+                // New short: proceeds are locked as collateral.
                 pos.shortCollateral += price * remainingQty;
                 pos.avgPx = weightedAverage(pos.qty, pos.avgPx, remainingQty, price);
                 pos.qty -= remainingQty;
@@ -290,9 +289,14 @@ void PortfolioManager::applyFill(const Order &order)
         }
     }
 
+    // Charge the full fee to cash once per order fill...
     m_cash -= totalFee;
     if (m_cash < 0.0 && m_cash > -1e-8)
         m_cash = 0.0;
+
+    // ...and reflect the exact same expense in realized P&L.
+    pos.realizedPnL -= totalFee;
+    m_realizedPnL -= totalFee;
 
     m_lastPrices[symbol] = price;
     pos.lastPrice = m_lastPrices.value(symbol, price);
@@ -346,8 +350,8 @@ double PortfolioManager::marginForPosition(const Position &position) const
         return 0.0;
 
     const double last = position.lastPrice > 0.0
-            ? position.lastPrice
-            : m_lastPrices.value(position.symbol, position.avgPx);
+                            ? position.lastPrice
+                            : m_lastPrices.value(position.symbol, position.avgPx);
     const double notional = std::abs(position.qty) * last;
     // Short margin requirement is configurable so risk can be tuned per venue.
     return notional * m_shortMarginRate;
@@ -357,8 +361,8 @@ double PortfolioManager::marginForOrder(const Order &order) const
 {
     const QString symbol = order.symbol.toUpper();
     const double price = order.price > 0.0
-            ? order.price
-            : m_lastPrices.value(symbol, 0.0);
+                             ? order.price
+                             : m_lastPrices.value(symbol, 0.0);
     return marginForOrder(symbol, order.side, order.quantity, price);
 }
 

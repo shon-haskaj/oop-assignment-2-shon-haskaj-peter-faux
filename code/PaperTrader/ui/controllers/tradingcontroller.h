@@ -7,6 +7,7 @@
 #include "core/models/order.h"
 #include "core/models/position.h"
 #include "core/models/portfoliosnapshot.h"
+#include "core/models/quote.h"
 
 class PaperTraderApp;
 
@@ -28,6 +29,7 @@ public:
 
 public slots:
     void onLastPriceChanged(const QString &symbol, double price);
+    void onQuoteUpdated(const Quote &quote);
 
 signals:
     void ordersChanged(const QList<Order> &orders);

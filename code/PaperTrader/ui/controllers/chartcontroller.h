@@ -21,6 +21,7 @@ public:
     void stopFeed();
 
     double lastPrice() const;
+    Quote lastQuote() const;
     QString lastSymbol() const;
 
     QStringList loadWatchlist() const;
@@ -34,6 +35,7 @@ signals:
     void feedStarted(const QString &symbol, MarketDataProvider::FeedMode mode);
     void feedStopped();
     void lastPriceChanged(const QString &symbol, double price);
+    void quoteUpdated(const Quote &quote);
 
 private:
     ChartManager *m_chartManager = nullptr;

@@ -16,6 +16,7 @@ SOURCES += \
     core/chartmanager.cpp \
     core/ordermanager.cpp \
     core/portfoliomanager.cpp \
+    core/executionsimulator.cpp \
     core/storagemanager.cpp \
     ui/mainwindow.cpp \
     ui/chartwidget.cpp \
@@ -30,6 +31,7 @@ HEADERS += \
     core/ordermanager.h \
     core/portfoliomanager.h \
     core/storagemanager.h \
+    core/executionsimulator.h \
     core/models/candle.h \
     core/models/quote.h \
     core/models/order.h \

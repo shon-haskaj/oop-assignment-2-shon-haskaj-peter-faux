@@ -318,7 +318,9 @@ void PortfolioManager::onOrdersUpdated(const QList<Order> &orders)
 {
     m_openOrders.clear();
     for (const Order &order : orders) {
-        if (order.status.compare(QStringLiteral("Open"), Qt::CaseInsensitive) == 0) {
+        const bool isOpen = order.status.compare(QStringLiteral("Open"), Qt::CaseInsensitive) == 0;
+        const bool isPartial = order.status.compare(QStringLiteral("PartiallyFilled"), Qt::CaseInsensitive) == 0;
+        if ((isOpen || isPartial) && order.quantity > 0.0) {
             m_openOrders.append(order);
         }
     }

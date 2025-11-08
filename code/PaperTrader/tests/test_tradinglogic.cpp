@@ -6,6 +6,7 @@
 #include "core/models/order.h"
 #include "core/models/position.h"
 #include "core/models/portfoliosnapshot.h"
+#include "core/executionsimulator.h"
 
 // Helper macro for readable fuzzy comparisons in assertions.
 #define VERIFY_NEAR(actual, expected, epsilon) \
@@ -29,6 +30,8 @@ private slots:
     void test_shortRejectedForMargin();
     void test_limitBuyRejected();
     void test_limitShortRejected();
+    void test_limitBuyFillsOnCross();
+    void test_limitSellFillsOnCross();
     void test_cancelReleasesOrderMargin();
     void test_partialFillReducesOrderMargin();
     void test_feeHandlingOnClose();
@@ -218,6 +221,95 @@ void TradingLogicTests::test_limitShortRejected()
                                 "LIMITSELL", "SELL", 500.0, 800.0);
     QVERIFY(!result.accepted);
     QCOMPARE(result.errorCode, QStringLiteral("ERR_INSUFFICIENT_MARGIN"));
+}
+
+void TradingLogicTests::test_limitBuyFillsOnCross()
+{
+    PortfolioManager pm;
+    OrderManager om;
+    ExecutionSimulator exec;
+
+    om.setPortfolioManager(&pm);
+    connectManagers(om, pm);
+
+    exec.setOrderManager(&om);
+    exec.setPortfolioManager(&pm);
+
+    auto result = om.placeOrder(OrderManager::OrderType::Limit,
+                                "LIMITFILL", "BUY", 2.0, 100.0);
+    QVERIFY(result.accepted);
+    QCOMPARE(result.order.status, QStringLiteral("Open"));
+
+    Candle c;
+    c.symbol = "LIMITFILL";
+    c.open = 101.0;
+    c.high = 102.0;
+    c.low = 99.0;
+    c.close = 99.5;
+
+    exec.onCandle(c);
+
+    const auto snapshot = pm.snapshot();
+    VERIFY_NEAR(snapshot.accountBalance, 99800.9204, 1e-3);
+    const auto positions = pm.positions();
+    QCOMPARE(positions.size(), 1);
+    const Position &pos = positions.first();
+    VERIFY_NEAR(pos.qty, 2.0, 1e-9);
+    VERIFY_NEAR(pos.avgPx, 99.5, 1e-6);
+
+    const auto orders = om.orders();
+    for (const Order &o : orders) {
+        if (o.id == result.order.id) {
+            QCOMPARE(o.status, QStringLiteral("Filled"));
+            VERIFY_NEAR(o.filledQuantity, 2.0, 1e-9);
+            break;
+        }
+    }
+}
+
+void TradingLogicTests::test_limitSellFillsOnCross()
+{
+    PortfolioManager pm;
+    OrderManager om;
+    ExecutionSimulator exec;
+
+    om.setPortfolioManager(&pm);
+    connectManagers(om, pm);
+
+    exec.setOrderManager(&om);
+    exec.setPortfolioManager(&pm);
+
+    auto result = om.placeOrder(OrderManager::OrderType::Limit,
+                                "LIMITSHORT", "SELL", 1.0, 103.0);
+    QVERIFY(result.accepted);
+
+    Candle c;
+    c.symbol = "LIMITSHORT";
+    c.open = 101.0;
+    c.high = 105.0;
+    c.low = 100.0;
+    c.close = 104.0;
+
+    exec.onCandle(c);
+
+    const auto snapshot = pm.snapshot();
+    VERIFY_NEAR(snapshot.accountBalance, 99999.9584, 1e-3);
+    VERIFY_NEAR(snapshot.accountMargin, 52.0, 1e-3);
+
+    const auto positions = pm.positions();
+    QCOMPARE(positions.size(), 1);
+    const Position &pos = positions.first();
+    VERIFY_NEAR(pos.qty, -1.0, 1e-9);
+    VERIFY_NEAR(pos.avgPx, 104.0, 1e-6);
+
+    const auto orders = om.orders();
+    for (const Order &o : orders) {
+        if (o.id == result.order.id) {
+            QCOMPARE(o.status, QStringLiteral("Filled"));
+            VERIFY_NEAR(o.filledQuantity, 1.0, 1e-9);
+            break;
+        }
+    }
 }
 
 void TradingLogicTests::test_cancelReleasesOrderMargin()

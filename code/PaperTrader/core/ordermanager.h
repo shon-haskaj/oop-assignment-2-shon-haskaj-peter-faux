@@ -35,6 +35,7 @@ public:
                                     double price = 0.0);
 
     bool cancelOrder(int orderId);
+    void applyFill(int orderId, double price, double quantity, double fee = 0.0);
 
     QList<Order> orders() const { return m_orders.values(); }
 

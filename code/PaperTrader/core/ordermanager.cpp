@@ -139,6 +139,54 @@ bool OrderManager::cancelOrder(int orderId)
     return true;
 }
 
+void OrderManager::applyFill(int orderId, double price, double quantity, double fee)
+{
+    if (!m_orders.contains(orderId) || quantity <= 0.0)
+        return;
+
+    Order stored = m_orders.value(orderId);
+    if (stored.status == QStringLiteral("Cancelled")
+            || stored.status == QStringLiteral("Filled")) {
+        return;
+    }
+
+    const double remaining = std::max(0.0, stored.quantity);
+    const double fillQty = std::min(quantity, remaining);
+    if (fillQty <= 0.0)
+        return;
+
+    const double previouslyFilled = stored.requestedQuantity - stored.quantity;
+    const double newTotalFilled = previouslyFilled + fillQty;
+
+    double averageFill = price;
+    if (previouslyFilled > 0.0 && stored.filledPrice > 0.0) {
+        averageFill = ((stored.filledPrice * previouslyFilled) + (price * fillQty))
+                      / newTotalFilled;
+    }
+
+    stored.quantity = remaining - fillQty;
+    if (stored.quantity <= 1e-9) {
+        stored.quantity = 0.0;
+        stored.status = QStringLiteral("Filled");
+    } else {
+        stored.status = QStringLiteral("PartiallyFilled");
+    }
+
+    stored.filledQuantity = newTotalFilled;
+    stored.filledPrice = averageFill;
+    stored.fee += fee;
+
+    m_orders.insert(orderId, stored);
+    emit ordersChanged(m_orders.values());
+
+    Order fillEvent = stored;
+    fillEvent.filledQuantity = fillQty;
+    fillEvent.filledPrice = price;
+    fillEvent.fee = fee;
+
+    emit orderFilled(fillEvent);
+}
+
 void OrderManager::setLastPrice(const QString &symbol, double price)
 {
     m_lastPrices.insert(normaliseSymbol(symbol), price);

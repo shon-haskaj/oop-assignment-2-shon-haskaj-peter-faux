@@ -6,6 +6,7 @@
 #include "ordermanager.h"
 #include "portfoliomanager.h"
 #include "storagemanager.h"
+#include "executionsimulator.h"
 
 Q_DECLARE_LOGGING_CATEGORY(lcApp)
 
@@ -32,4 +33,5 @@ private:
     OrderManager       *m_orderManager = nullptr;
     PortfolioManager   *m_portfolioManager = nullptr;
     StorageManager     *m_storageManager = nullptr;
+    ExecutionSimulator *m_executionSimulator = nullptr;
 };

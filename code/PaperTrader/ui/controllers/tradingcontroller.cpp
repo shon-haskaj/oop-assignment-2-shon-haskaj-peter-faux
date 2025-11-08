@@ -49,6 +49,19 @@ void TradingController::onLastPriceChanged(const QString &symbol, double price)
         m_orderManager->setLastPrice(symbol, price);
 }
 
+void TradingController::onQuoteUpdated(const Quote &quote)
+{
+    if (quote.symbol.isEmpty())
+        return;
+
+    const double effectiveLast = quote.last > 0.0 ? quote.last : quote.mid();
+    if (m_orderManager && effectiveLast > 0.0)
+        m_orderManager->setLastPrice(quote.symbol, effectiveLast);
+
+    if (m_portfolioManager)
+        m_portfolioManager->updateFromQuote(quote);
+}
+
 void TradingController::bindOrderManager(OrderManager *manager)
 {
     if (manager == m_orderManager)

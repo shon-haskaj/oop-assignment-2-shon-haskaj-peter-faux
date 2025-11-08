@@ -498,6 +498,14 @@ void MainWindow::setupConnections()
                     m_lastSymbol = symbol;
                     m_lastPrice = price;
                 });
+        connect(m_chartController, &ChartController::quoteUpdated,
+                this, [this](const Quote &quote) {
+                    m_lastQuote = quote;
+                    if (!quote.symbol.isEmpty())
+                        m_lastSymbol = quote.symbol;
+                    const double reference = quote.last > 0.0 ? quote.last : quote.mid();
+                    m_lastPrice = reference;
+                });
         connect(m_chartController, &ChartController::connectionStateChanged,
                 this, [this](bool connected) {
                     m_statusLabel->setText(connected ? "🟢 Connected" : "🔴 Disconnected");
@@ -507,6 +515,8 @@ void MainWindow::setupConnections()
                     m_chart->clearCandles();
                     m_lastSymbol = symbol;
                     m_lastPrice = 0.0;
+                    m_lastQuote = {};
+                    m_lastQuote.symbol = symbol;
                     setWindowTitle(QString("PaperTrader - %1 (%2)")
                                        .arg(symbol)
                                        .arg(m_feedSelector->currentText()));
@@ -517,6 +527,7 @@ void MainWindow::setupConnections()
                     m_chart->clearCandles();
                     m_lastSymbol.clear();
                     m_lastPrice = 0.0;
+                    m_lastQuote = {};
                     m_statusLabel->setText("🔴 Disconnected");
                     setWindowTitle("PaperTrader - Market Feed Viewer");
                 });
@@ -980,7 +991,10 @@ void MainWindow::onPlaceOrder()
     }
 
     if (type == OrderManager::OrderType::Market && price <= 0.0) {
-        const double referencePrice = m_chartController ? m_chartController->lastPrice() : m_lastPrice;
+        const Quote referenceQuote = m_chartController ? m_chartController->lastQuote() : m_lastQuote;
+        const double referencePrice = referenceQuote.last > 0.0
+                ? referenceQuote.last
+                : referenceQuote.mid();
         if (referencePrice <= 0.0) {
             m_statusLabel->setText("⚠️ Awaiting price data");
             return;

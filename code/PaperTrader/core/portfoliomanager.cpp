@@ -199,6 +199,25 @@ void PortfolioManager::onCandle(const Candle &c)
     emitSnapshot();
 }
 
+void PortfolioManager::updateFromQuote(const Quote &quote)
+{
+    const QString symbol = quote.symbol.trimmed().toUpper();
+    if (symbol.isEmpty())
+        return;
+
+    const double price = quote.last > 0.0 ? quote.last : quote.mid();
+    if (price <= 0.0)
+        return;
+
+    const double previous = m_lastPrices.value(symbol, 0.0);
+    if (qFuzzyCompare(previous + 1.0, price + 1.0))
+        return;
+
+    m_lastPrices.insert(symbol, price);
+    updateUnrealizedFor(symbol);
+    emitSnapshot();
+}
+
 void PortfolioManager::applyFill(const Order &order)
 {
     if (order.filledQuantity <= 0.0)

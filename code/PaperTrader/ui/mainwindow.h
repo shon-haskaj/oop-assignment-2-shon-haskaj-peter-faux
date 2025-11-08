@@ -9,6 +9,7 @@
 #include "core/models/order.h"
 #include "core/models/position.h"
 #include "core/models/portfoliosnapshot.h"
+#include "core/models/quote.h"
 #include "controllers/chartcontroller.h"
 #include "controllers/tradingcontroller.h"
 
@@ -107,6 +108,7 @@ private:
 
     QStringList m_watchlist;
     double m_lastPrice = 0.0;
+    Quote  m_lastQuote;
     QString m_lastSymbol;
     int m_quantityPrecision = 6;
 

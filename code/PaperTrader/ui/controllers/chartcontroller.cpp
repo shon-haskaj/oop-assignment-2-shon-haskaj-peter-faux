@@ -19,6 +19,8 @@ ChartController::ChartController(ChartManager *chartManager, QObject *parent)
             this, &ChartController::feedStopped);
     connect(m_chartManager, &ChartManager::lastPriceChanged,
             this, &ChartController::lastPriceChanged);
+    connect(m_chartManager, &ChartManager::quoteUpdated,
+            this, &ChartController::quoteUpdated);
 }
 
 void ChartController::setFeedMode(MarketDataProvider::FeedMode mode)
@@ -66,6 +68,11 @@ void ChartController::saveSettings(const QJsonObject &settings) const
 double ChartController::lastPrice() const
 {
     return m_chartManager ? m_chartManager->lastPrice() : 0.0;
+}
+
+Quote ChartController::lastQuote() const
+{
+    return m_chartManager ? m_chartManager->lastQuote() : Quote{};
 }
 
 QString ChartController::lastSymbol() const

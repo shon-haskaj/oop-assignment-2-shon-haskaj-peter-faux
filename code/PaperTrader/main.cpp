@@ -12,6 +12,8 @@ int main(int argc, char *argv[]) {
     TradingController tradingController(&coreApp);
     QObject::connect(&chartController, &ChartController::lastPriceChanged,
                      &tradingController, &TradingController::onLastPriceChanged);
+    QObject::connect(&chartController, &ChartController::quoteUpdated,
+                     &tradingController, &TradingController::onQuoteUpdated);
 
     MainWindow w(&chartController, &tradingController);
     w.showMaximized();

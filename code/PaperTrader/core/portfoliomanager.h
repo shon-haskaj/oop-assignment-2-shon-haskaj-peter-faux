@@ -6,6 +6,7 @@
 #include "models/order.h"
 #include "models/candle.h"
 #include "models/portfoliosnapshot.h"
+#include "models/quote.h"
 
 class PortfolioManager : public QObject {
     Q_OBJECT
@@ -38,6 +39,7 @@ public slots:
     void onCandle(const Candle &c);
     void applyFill(const Order &order);
     void onOrdersUpdated(const QList<Order> &orders);
+    void updateFromQuote(const Quote &quote);
 
 signals:
     void portfolioChanged(const PortfolioSnapshot &snapshot, const QList<Position> &positions);

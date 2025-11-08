@@ -7,6 +7,7 @@
 
 #include "marketdataprovider.h"
 #include "models/candle.h"
+#include "models/quote.h"
 
 class StorageManager;
 
@@ -25,7 +26,8 @@ public:
     void stopFeed();
 
     QString lastSymbol() const { return m_lastSymbol; }
-    double lastPrice() const { return m_lastPrice; }
+    double lastPrice() const { return m_lastQuote.last; }
+    Quote lastQuote() const { return m_lastQuote; }
 
     QStringList loadWatchlist() const;
     void saveWatchlist(const QStringList &symbols) const;
@@ -38,6 +40,7 @@ signals:
     void feedStarted(const QString &symbol, MarketDataProvider::FeedMode mode);
     void feedStopped();
     void lastPriceChanged(const QString &symbol, double price);
+    void quoteUpdated(const Quote &quote);
 
 private slots:
     void handleCandle(const Candle &c);
@@ -50,5 +53,5 @@ private:
     StorageManager     *m_storage = nullptr;
     MarketDataProvider::FeedMode m_mode = MarketDataProvider::FeedMode::Synthetic;
     QString m_lastSymbol;
-    double  m_lastPrice = 0.0;
+    Quote   m_lastQuote;
 };
